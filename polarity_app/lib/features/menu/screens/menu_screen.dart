@@ -301,13 +301,17 @@ class _MenuBackgroundPainter extends CustomPainter {
   final _MenuBgNotifier notifier;
   final Color color;
 
+  // Reusable Paint objects — mutated in-place per frame (zero allocation)
+  final Paint _circlePaint = Paint();
+  final Paint _gridPaint = Paint();
+
   _MenuBackgroundPainter({required this.notifier, required this.color})
       : super(repaint: notifier);
 
   @override
   void paint(Canvas canvas, Size size) {
     final phase = notifier.phase;
-    final paint = Paint()
+    _circlePaint
       ..color = color.withValues(alpha: 0.03)
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
@@ -317,19 +321,20 @@ class _MenuBackgroundPainter extends CustomPainter {
 
     for (int i = 0; i < 8; i++) {
       final radius = 40.0 + i * 50 + sin(phase * 0.3 + i * 0.5) * 10;
-      canvas.drawCircle(Offset(cx, cy), radius, paint);
+      canvas.drawCircle(Offset(cx, cy), radius, _circlePaint);
     }
 
-    final gridPaint = Paint()
+    _gridPaint
       ..color = color.withValues(alpha: 0.015)
-      ..strokeWidth = 0.5;
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.fill;
 
     const spacing = 50.0;
     for (double x = 0; x < size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), _gridPaint);
     }
     for (double y = 0; y < size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _gridPaint);
     }
   }
 

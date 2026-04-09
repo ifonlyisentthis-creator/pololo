@@ -12,6 +12,13 @@ class BallPainters {
   static final Path _pathA = Path();
   static final Path _pathB = Path();
 
+  // Reusable Paint objects — mutated in-place per draw call (zero allocation)
+  static final Paint _fillP = Paint();
+  static final Paint _strokeP = Paint();
+  static final Paint _glowP = Paint();
+  static final Paint _specP = Paint();
+  static final Paint _extraP = Paint();
+
   static const List<int> _branchDirections = <int>[-1, 1];
   static const List<double> _leafVeinOffsets = <double>[-0.35, 0.0, 0.35];
 
@@ -111,12 +118,6 @@ class BallPainters {
     path.close();
   }
 
-  static Paint _glowPaint(Color color, double sigma) {
-    return Paint()
-      ..color = color
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, sigma);
-  }
-
   // ─── 1. Circle ─────────────────────────────────────────────────────────
 
   static void _drawCircle(Canvas canvas, double r, List<Color> colors,
@@ -124,26 +125,31 @@ class BallPainters {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Outer glow
-    final glowP = _glowPaint(
-      _safeColor(colors, 0).withValues(alpha: 0.35 * intensity * glow),
-      r * 0.5,
-    );
-    canvas.drawCircle(Offset.zero, r * 1.15, glowP);
+    _glowP
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.35 * intensity * glow)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.5)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 1.15, _glowP);
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.15, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawCircle(Offset.zero, r, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.15, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset.zero, r, _fillP);
 
     // Specular
-    final specP = Paint()
+    _specP
       ..color = Colors.white.withValues(alpha: 0.7 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
-    canvas.drawCircle(Offset(-r * 0.25, -r * 0.25), r * 0.18, specP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset(-r * 0.25, -r * 0.25), r * 0.18, _specP);
   }
 
   // ─── 2. Hexagon ────────────────────────────────────────────────────────
@@ -156,20 +162,24 @@ class BallPainters {
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.2, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.2, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.6 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.6 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 3. Star5 ──────────────────────────────────────────────────────────
@@ -181,27 +191,31 @@ class BallPainters {
       _getCachedPath(2, r, (p) => _buildStarPath(p, 5, r, r * 0.4));
 
     // Glow
-    final glowP = _glowPaint(
-      _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow),
-      r * 0.35,
-    );
-    canvas.drawPath(path, glowP);
+    _glowP
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawPath(path, _glowP);
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Tip glow stroke
-    final tipP = Paint()
+    _specP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
       ..color = Colors.white.withValues(alpha: 0.3 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
-    canvas.drawPath(path, tipP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
+      ..shader = null;
+    canvas.drawPath(path, _specP);
   }
 
   static void _buildStarPath(
@@ -237,20 +251,24 @@ class BallPainters {
     });
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.1, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.1, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 5. Pentagon ───────────────────────────────────────────────────────
@@ -262,20 +280,24 @@ class BallPainters {
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.2, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.2, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.55 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.55 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 6. Diamond ────────────────────────────────────────────────────────
@@ -293,28 +315,33 @@ class BallPainters {
     });
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.15, 1.0],
-    );
-    final fillP = Paint()
-      ..shader =
-          gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r * 1.2));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.15, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r * 1.2))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.3
-      ..color = Colors.white.withValues(alpha: 0.35 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = Colors.white.withValues(alpha: 0.35 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
 
     // Inner facet line
-    final lineP = Paint()
+    _extraP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.7
-      ..color = Colors.white.withValues(alpha: 0.2 * glow);
-    canvas.drawLine(Offset(-r * 0.55, 0), Offset(r * 0.55, 0), lineP);
+      ..color = Colors.white.withValues(alpha: 0.2 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawLine(Offset(-r * 0.55, 0), Offset(r * 0.55, 0), _extraP);
   }
 
   // ─── 7. Gear ───────────────────────────────────────────────────────────
@@ -348,25 +375,32 @@ class BallPainters {
     });
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.3, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.3, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Center axle hole
-    final axleP = Paint()
-      ..color = Colors.black.withValues(alpha: 0.4);
-    canvas.drawCircle(Offset.zero, r * 0.18, axleP);
+    _extraP
+      ..color = Colors.black.withValues(alpha: 0.4)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.18, _extraP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 8. Crescent ───────────────────────────────────────────────────────
@@ -386,28 +420,33 @@ class BallPainters {
     });
 
     // Outer glow
-    final glowP = _glowPaint(
-      _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow),
-      r * 0.4,
-    );
-    canvas.drawPath(path, glowP);
+    _glowP
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.4)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawPath(path, _glowP);
 
     // Fill
-    final gradient = RadialGradient(
-      center: const Alignment(-0.3, 0.0),
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.1, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        center: const Alignment(-0.3, 0.0),
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.1, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Edge stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = Colors.white.withValues(alpha: 0.25 * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = Colors.white.withValues(alpha: 0.25 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 9. Crown ──────────────────────────────────────────────────────────
@@ -433,28 +472,33 @@ class BallPainters {
     });
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.1, 1.0],
-    );
-    final fillP = Paint()
-      ..shader =
-          gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r * 1.2));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.1, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r * 1.2))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Jewel dots on tips
-    final jewelP = Paint()
+    _specP
       ..color = Colors.white.withValues(alpha: 0.6 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
-    canvas.drawCircle(Offset(-w * 0.25, -h * 0.5), r * 0.08, jewelP);
-    canvas.drawCircle(Offset(w * 0.25, -h * 0.5), r * 0.08, jewelP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset(-w * 0.25, -h * 0.5), r * 0.08, _specP);
+    canvas.drawCircle(Offset(w * 0.25, -h * 0.5), r * 0.08, _specP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.45 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.45 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 10. Cross ─────────────────────────────────────────────────────────
@@ -481,20 +525,24 @@ class BallPainters {
     });
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.15, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.15, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 11. Cube ──────────────────────────────────────────────────────────
@@ -522,9 +570,12 @@ class BallPainters {
         ..lineTo(backLeft.dx, backLeft.dy)
         ..close();
     });
-    final fillP = Paint()
-      ..color = Color.lerp(base, Colors.white, 0.25 * glow)!;
-    canvas.drawPath(topFace, fillP);
+    _fillP
+      ..color = Color.lerp(base, Colors.white, 0.25 * glow)!
+      ..style = PaintingStyle.fill
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(topFace, _fillP);
 
     // Left face (medium)
     final leftFace = _getCachedPath(11, r, (p) {
@@ -535,8 +586,8 @@ class BallPainters {
         ..lineTo(left.dx, left.dy)
         ..close();
     });
-    fillP.color = Color.lerp(base, Colors.black, 0.15)!;
-    canvas.drawPath(leftFace, fillP);
+    _fillP.color = Color.lerp(base, Colors.black, 0.15)!;
+    canvas.drawPath(leftFace, _fillP);
 
     // Right face (darkest)
     final rightFace = _getCachedPath(12, r, (p) {
@@ -547,17 +598,19 @@ class BallPainters {
         ..lineTo(right.dx, right.dy)
         ..close();
     });
-    fillP.color = Color.lerp(base, Colors.black, 0.35)!;
-    canvas.drawPath(rightFace, fillP);
+    _fillP.color = Color.lerp(base, Colors.black, 0.35)!;
+    canvas.drawPath(rightFace, _fillP);
 
     // Edges
-    final edgeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = Colors.white.withValues(alpha: 0.3 * intensity * glow);
-    canvas.drawPath(topFace, edgeP);
-    canvas.drawPath(leftFace, edgeP);
-    canvas.drawPath(rightFace, edgeP);
+      ..color = Colors.white.withValues(alpha: 0.3 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(topFace, _strokeP);
+    canvas.drawPath(leftFace, _strokeP);
+    canvas.drawPath(rightFace, _strokeP);
   }
 
   // ─── 12. Spiral ────────────────────────────────────────────────────────
@@ -583,23 +636,26 @@ class BallPainters {
     }
 
     // Outer glow stroke
-    final glowP = Paint()
+    _glowP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.22
       ..color = _safeColor(colors, 0).withValues(alpha: 0.2 * intensity * glow)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15)
-      ..strokeCap = StrokeCap.round;
-    canvas.drawPath(path, glowP);
+      ..strokeCap = StrokeCap.round
+      ..shader = null;
+    canvas.drawPath(path, _glowP);
 
     // Main stroke
-    final mainP = Paint()
+    _fillP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.12
       ..strokeCap = StrokeCap.round
       ..shader = RadialGradient(
         colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, mainP);
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null;
+    canvas.drawPath(path, _fillP);
   }
 
   // ─── 13. Eye ───────────────────────────────────────────────────────────
@@ -620,42 +676,51 @@ class BallPainters {
     });
 
     // Outer glow
-    final glowP = _glowPaint(
-      _safeColor(colors, 0).withValues(alpha: 0.25 * intensity * glow),
-      r * 0.35,
-    );
-    canvas.drawPath(eyePath, glowP);
+    _glowP
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.25 * intensity * glow)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawPath(eyePath, _glowP);
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(eyePath, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(eyePath, _fillP);
 
     // Iris
-    final irisP = Paint()
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.9);
-    canvas.drawCircle(Offset.zero, r * 0.35, irisP);
+    _extraP
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.9)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.35, _extraP);
 
     // Pupil
-    final pupilP = Paint()
-      ..color = Colors.black.withValues(alpha: 0.85);
-    canvas.drawCircle(Offset.zero, r * 0.17, pupilP);
+    _extraP.color = Colors.black.withValues(alpha: 0.85);
+    canvas.drawCircle(Offset.zero, r * 0.17, _extraP);
 
     // Specular highlight
-    final specP = Paint()
+    _specP
       ..color = Colors.white.withValues(alpha: 0.65 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0);
-    canvas.drawCircle(Offset(-r * 0.1, -r * 0.1), r * 0.08, specP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset(-r * 0.1, -r * 0.1), r * 0.08, _specP);
 
     // Outline stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = Colors.white.withValues(alpha: 0.25 * glow);
-    canvas.drawPath(eyePath, strokeP);
+      ..color = Colors.white.withValues(alpha: 0.25 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(eyePath, _strokeP);
   }
 
   // ─── 14. Snowflake ─────────────────────────────────────────────────────
@@ -665,27 +730,30 @@ class BallPainters {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Main arm stroke
-    final armP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.1
       ..strokeCap = StrokeCap.round
-      ..color = _safeColor(colors, 0).withValues(alpha: 0.9 * intensity);
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.9 * intensity)
+      ..maskFilter = null
+      ..shader = null;
 
     // Glow stroke
-    final glowP = Paint()
+    _glowP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.18
       ..strokeCap = StrokeCap.round
       ..color = _safeColor(colors, 0).withValues(alpha: 0.25 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12)
+      ..shader = null;
 
     for (var i = 0; i < 6; i++) {
       final angle = pi / 3 * i - pi / 2;
       final tip = Offset(r * cos(angle), r * sin(angle));
 
       // Main arm
-      canvas.drawLine(Offset.zero, tip, glowP);
-      canvas.drawLine(Offset.zero, tip, armP);
+      canvas.drawLine(Offset.zero, tip, _glowP);
+      canvas.drawLine(Offset.zero, tip, _strokeP);
 
       // Branches at 60% out
       final branchBase = tip * 0.6;
@@ -694,15 +762,17 @@ class BallPainters {
         final branchAngle = angle + dir * pi / 3;
         final branchTip = branchBase +
             Offset(branchLen * cos(branchAngle), branchLen * sin(branchAngle));
-        canvas.drawLine(branchBase, branchTip, armP);
+        canvas.drawLine(branchBase, branchTip, _strokeP);
       }
     }
 
     // Center dot
-    final dotP = Paint()
+    _specP
       ..color = Colors.white.withValues(alpha: 0.5 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
-    canvas.drawCircle(Offset.zero, r * 0.1, dotP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.1, _specP);
   }
 
   // ─── 15. Bolt ──────────────────────────────────────────────────────────
@@ -722,29 +792,34 @@ class BallPainters {
     });
 
     // Outer glow
-    final glowP = _glowPaint(
-      _safeColor(colors, 0).withValues(alpha: 0.35 * intensity * glow),
-      r * 0.4,
-    );
-    canvas.drawPath(path, glowP);
+    _glowP
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.35 * intensity * glow)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.4)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawPath(path, _glowP);
 
     // Fill
-    final gradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(
-          Rect.fromCenter(center: Offset.zero, width: r * 2, height: r * 2.4));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+      ).createShader(
+          Rect.fromCenter(center: Offset.zero, width: r * 2, height: r * 2.4))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = Colors.white.withValues(alpha: 0.35 * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = Colors.white.withValues(alpha: 0.35 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 16. Prism ─────────────────────────────────────────────────────────
@@ -756,27 +831,33 @@ class BallPainters {
       _getCachedPath(15, r, (p) => _buildRegularPolygonPath(p, 3, r));
 
     // Fill
-    final gradient = RadialGradient(
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.1, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.1, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Internal refraction lines
-    final lineP = Paint()
+    _extraP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.6
-      ..color = Colors.white.withValues(alpha: 0.2 * glow);
-    canvas.drawLine(Offset(0, -r), Offset(0, r * 0.3), lineP);
+      ..color = Colors.white.withValues(alpha: 0.2 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawLine(Offset(0, -r), Offset(0, r * 0.3), _extraP);
 
     // Stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 17. Leaf ──────────────────────────────────────────────────────────
@@ -793,38 +874,43 @@ class BallPainters {
     });
 
     // Fill
-    final gradient = RadialGradient(
-      center: const Alignment(0.0, -0.2),
-      colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      stops: const [0.1, 1.0],
-    );
-    final fillP = Paint()
-      ..shader =
-          gradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r * 1.1));
-    canvas.drawPath(path, fillP);
+    _fillP
+      ..shader = RadialGradient(
+        center: const Alignment(0.0, -0.2),
+        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+        stops: const [0.1, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r * 1.1))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _fillP);
 
     // Center vein
-    final veinP = Paint()
+    _extraP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
       ..strokeCap = StrokeCap.round
-      ..color = Colors.white.withValues(alpha: 0.35 * glow);
-    canvas.drawLine(Offset(0, -r * 0.85), Offset(0, r * 0.85), veinP);
+      ..color = Colors.white.withValues(alpha: 0.35 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawLine(Offset(0, -r * 0.85), Offset(0, r * 0.85), _extraP);
 
     // Side veins
-    veinP.strokeWidth = 0.6;
-    veinP.color = Colors.white.withValues(alpha: 0.2 * glow);
+    _extraP.strokeWidth = 0.6;
+    _extraP.color = Colors.white.withValues(alpha: 0.2 * glow);
     for (final dy in _leafVeinOffsets) {
-      canvas.drawLine(Offset(0, r * dy), Offset(r * 0.4, r * (dy - 0.2)), veinP);
-      canvas.drawLine(Offset(0, r * dy), Offset(-r * 0.4, r * (dy - 0.2)), veinP);
+      canvas.drawLine(Offset(0, r * dy), Offset(r * 0.4, r * (dy - 0.2)), _extraP);
+      canvas.drawLine(Offset(0, r * dy), Offset(-r * 0.4, r * (dy - 0.2)), _extraP);
     }
 
     // Outline stroke
-    final strokeP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.4 * intensity * glow);
-    canvas.drawPath(path, strokeP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.4 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path, _strokeP);
   }
 
   // ─── 18. Ring ──────────────────────────────────────────────────────────
@@ -834,22 +920,24 @@ class BallPainters {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Inner faint glow
-    final glowP = _glowPaint(
-      _safeColor(colors, 0).withValues(alpha: 0.15 * intensity * glow),
-      r * 0.4,
-    );
-    canvas.drawCircle(Offset.zero, r * 0.7, glowP);
+    _glowP
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.15 * intensity * glow)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.4)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.7, _glowP);
 
     // Outer glow ring
-    final outerGlowP = Paint()
+    _specP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.25
       ..color = _safeColor(colors, 0).withValues(alpha: 0.2 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15);
-    canvas.drawCircle(Offset.zero, r, outerGlowP);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15)
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r, _specP);
 
     // Main ring stroke
-    final ringP = Paint()
+    _fillP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..shader = SweepGradient(
@@ -859,8 +947,10 @@ class BallPainters {
           _safeColor(colors, 0),
         ],
         stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r));
-    canvas.drawCircle(Offset.zero, r, ringP);
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null;
+    canvas.drawCircle(Offset.zero, r, _fillP);
   }
 
   // ─── 19. Slit ──────────────────────────────────────────────────────────
@@ -876,30 +966,36 @@ class BallPainters {
     );
 
     // Soft outer glow
-    final glowP = Paint()
+    _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35);
-    canvas.drawRRect(rrect, glowP);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawRRect(rrect, _glowP);
 
     // Main fill with linear gradient
-    final gradient = LinearGradient(
-      colors: [
-        _safeColor(colors, 1).withValues(alpha: 0.4),
-        _safeColor(colors, 0),
-        _safeColor(colors, 1).withValues(alpha: 0.4),
-      ],
-      stops: const [0.0, 0.5, 1.0],
-    );
-    final fillP = Paint()
-      ..shader = gradient.createShader(
-          Rect.fromCenter(center: Offset.zero, width: w * 2, height: h * 2));
-    canvas.drawRRect(rrect, fillP);
+    _fillP
+      ..shader = LinearGradient(
+        colors: [
+          _safeColor(colors, 1).withValues(alpha: 0.4),
+          _safeColor(colors, 0),
+          _safeColor(colors, 1).withValues(alpha: 0.4),
+        ],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(
+          Rect.fromCenter(center: Offset.zero, width: w * 2, height: h * 2))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(rrect, _fillP);
 
     // Bright center dot
-    final dotP = Paint()
+    _specP
       ..color = Colors.white.withValues(alpha: 0.75 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
-    canvas.drawCircle(Offset.zero, r * 0.09, dotP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.09, _specP);
   }
 
   // ─── 20. Singularity ──────────────────────────────────────────────────
@@ -909,39 +1005,45 @@ class BallPainters {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Outer aura
-    final auraP = Paint()
+    _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.55);
-    canvas.drawCircle(Offset.zero, r * 1.1, auraP);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.55)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 1.1, _glowP);
 
     // Mid aura ring
-    final midP = Paint()
+    _specP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.12
       ..color = _safeColor(colors, 0).withValues(alpha: 0.35 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1);
-    canvas.drawCircle(Offset.zero, r * 0.75, midP);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1)
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.75, _specP);
 
     // Contrasting subtle ring
-    final contrastP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.3 * glow);
-    canvas.drawCircle(Offset.zero, r * 0.55, contrastP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.3 * glow)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.55, _strokeP);
 
     // Dark gradient core
-    final coreGrad = RadialGradient(
-      colors: [
-        Colors.black,
-        Colors.black.withValues(alpha: 0.9),
-        _safeColor(colors, 0).withValues(alpha: 0.15),
-      ],
-      stops: const [0.0, 0.6, 1.0],
-    );
-    final coreP = Paint()
-      ..shader =
-          coreGrad.createShader(Rect.fromCircle(center: Offset.zero, radius: r * 0.45));
-    canvas.drawCircle(Offset.zero, r * 0.45, coreP);
+    _fillP
+      ..shader = RadialGradient(
+        colors: [
+          Colors.black,
+          Colors.black.withValues(alpha: 0.9),
+          _safeColor(colors, 0).withValues(alpha: 0.15),
+        ],
+        stops: const [0.0, 0.6, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r * 0.45))
+      ..color = const Color(0xFFFFFFFF)
+      ..maskFilter = null
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset.zero, r * 0.45, _fillP);
   }
 
   // ─── 21. Double Ring ───────────────────────────────────────────────────
@@ -951,40 +1053,48 @@ class BallPainters {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Outer ring glow
-    final outerGlowP = Paint()
+    _glowP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.18
       ..color = _safeColor(colors, 0).withValues(alpha: 0.18 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12);
-    canvas.drawCircle(Offset.zero, r, outerGlowP);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12)
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r, _glowP);
 
     // Outer ring
-    final outerP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
-      ..color = _safeColor(colors, 0).withValues(alpha: 0.85 * intensity);
-    canvas.drawCircle(Offset.zero, r, outerP);
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.85 * intensity)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r, _strokeP);
 
     // Inner ring glow
-    final innerGlowP = Paint()
+    _specP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.12
       ..color = _safeColor(colors, 1).withValues(alpha: 0.15 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.08);
-    canvas.drawCircle(Offset.zero, r * 0.6, innerGlowP);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.08)
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.6, _specP);
 
     // Inner ring
-    final innerP = Paint()
+    _extraP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.7 * intensity);
-    canvas.drawCircle(Offset.zero, r * 0.6, innerP);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.7 * intensity)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.6, _extraP);
 
     // Center dot
-    final dotP = Paint()
+    _fillP
       ..color = Colors.white.withValues(alpha: 0.3 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
-    canvas.drawCircle(Offset.zero, r * 0.07, dotP);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, r * 0.07, _fillP);
   }
 
   // ─── 22. Helix ─────────────────────────────────────────────────────────
@@ -1018,38 +1128,44 @@ class BallPainters {
     }
 
     // Strand 1 glow
-    final glow1P = Paint()
+    _glowP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.16
       ..strokeCap = StrokeCap.round
       ..color = _safeColor(colors, 0).withValues(alpha: 0.2 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1);
-    canvas.drawPath(path1, glow1P);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1)
+      ..shader = null;
+    canvas.drawPath(path1, _glowP);
 
     // Strand 1 main
-    final main1P = Paint()
+    _fillP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.1
       ..strokeCap = StrokeCap.round
-      ..color = _safeColor(colors, 0).withValues(alpha: 0.85 * intensity);
-    canvas.drawPath(path1, main1P);
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.85 * intensity)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path1, _fillP);
 
     // Strand 2 glow
-    final glow2P = Paint()
+    _specP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.16
       ..strokeCap = StrokeCap.round
       ..color = _safeColor(colors, 1).withValues(alpha: 0.15 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1);
-    canvas.drawPath(path2, glow2P);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1)
+      ..shader = null;
+    canvas.drawPath(path2, _specP);
 
     // Strand 2 main
-    final main2P = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.1
       ..strokeCap = StrokeCap.round
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.7 * intensity);
-    canvas.drawPath(path2, main2P);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.7 * intensity)
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawPath(path2, _strokeP);
   }
 
   // ─── 23. Tesseract ─────────────────────────────────────────────────────
@@ -1092,22 +1208,28 @@ class BallPainters {
     ];
 
     // Outer cube edges
-    final outerP = Paint()
+    _strokeP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
-      ..color = _safeColor(colors, 0).withValues(alpha: 0.6 * intensity);
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.6 * intensity)
+      ..maskFilter = null
+      ..shader = null;
 
     // Inner cube edges
-    final innerP = Paint()
+    _extraP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity);
+      ..color = _safeColor(colors, 1).withValues(alpha: 0.5 * intensity)
+      ..maskFilter = null
+      ..shader = null;
 
     // Connect paint
-    final connectP = Paint()
+    _fillP
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.6
-      ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow);
+      ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
+      ..maskFilter = null
+      ..shader = null;
 
     // Draw outer cube edges (front face, back face, connecting)
     void drawCubeEdges(List<Offset> v, Paint p) {
@@ -1125,20 +1247,22 @@ class BallPainters {
       }
     }
 
-    drawCubeEdges(outerVerts, outerP);
-    drawCubeEdges(innerVerts, innerP);
+    drawCubeEdges(outerVerts, _strokeP);
+    drawCubeEdges(innerVerts, _extraP);
 
     // Connect outer to inner (the 4D projection links)
     for (var i = 0; i < 8; i++) {
-      canvas.drawLine(outerVerts[i], innerVerts[i], connectP);
+      canvas.drawLine(outerVerts[i], innerVerts[i], _fillP);
     }
 
     // Vertex glow dots
-    final dotP = Paint()
+    _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.5 * glow)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
+      ..style = PaintingStyle.fill
+      ..shader = null;
     for (final v in outerVerts) {
-      canvas.drawCircle(v, r * 0.04, dotP);
+      canvas.drawCircle(v, r * 0.04, _glowP);
     }
   }
 }

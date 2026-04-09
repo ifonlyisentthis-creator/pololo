@@ -101,12 +101,16 @@ void main() {
 
     test('obstacles spawn after safe delay', () {
       engine.startGame();
-      // No obstacles at t=0 due to safe spawn delay
-      expect(engine.obstacles, isEmpty);
+      // Obstacles are pre-seeded offscreen from below to prevent pop-in.
+      // Verify they exist and are positioned below the visible screen.
+      expect(engine.obstacles, isNotEmpty);
+      for (final obs in engine.obstacles) {
+        expect(obs.worldY, greaterThanOrEqualTo(800)); // below screen height
+      }
       // Keep player alive — enable invincibility and toggle magnet
       engine.isInvincible = true;
       engine.invincibilityTimer = 5.0;
-      // Simulate 1.5 seconds (safe delay is 0.8s, so obstacles appear)
+      // Simulate 1.5 seconds — obstacles scroll up onto screen
       for (int i = 0; i < 30; i++) {
         engine.isTouching = i % 4 < 2;
         engine.update(0.05);
