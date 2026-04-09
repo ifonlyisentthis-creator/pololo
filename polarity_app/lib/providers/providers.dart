@@ -76,6 +76,10 @@ final easyModeProvider = StateProvider<bool>((ref) {
   return ref.read(storageServiceProvider).easyMode;
 });
 
+final rememberThemeAcrossLaunchesProvider = StateProvider<bool>((ref) {
+  return ref.read(storageServiceProvider).rememberThemeAcrossLaunches;
+});
+
 final eliteUnlockedProvider = StateProvider<bool>((ref) {
   return ref.read(storageServiceProvider).isEliteUnlocked;
 });

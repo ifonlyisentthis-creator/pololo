@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:polarity/core/constants.dart';
 
@@ -45,6 +44,12 @@ class AdService {
   // dismiss/fail callback). Prevents double-fire from rapid death events.
   bool _interstitialOnScreen = false;
 
+  bool get _isAdsPlatformSupported {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
   // V6: Callback to notify Riverpod when rewarded ad readiness changes
   void Function(bool)? onRewardedReadyChanged;
 
@@ -54,8 +59,8 @@ class AdService {
 
   bool get adsEnabled => _adsEnabled;
   set adsEnabled(bool value) {
-    _adsEnabled = value;
-    if (!value) {
+    _adsEnabled = value && _isAdsPlatformSupported;
+    if (!_adsEnabled) {
       _interstitialAd?.dispose();
       _interstitialAd = null;
       _isInterstitialReady = false;
@@ -68,17 +73,27 @@ class AdService {
 
   bool get isRewardedReady => _isRewardedReady && _adsEnabled;
 
-  String get _interstitialAdUnitId => Platform.isAndroid
-      ? GameConstants.androidInterstitialId
-      : GameConstants.iosInterstitialId;
+    String get _interstitialAdUnitId =>
+      defaultTargetPlatform == TargetPlatform.android
+        ? GameConstants.androidInterstitialId
+        : GameConstants.iosInterstitialId;
 
-  String get _rewardedAdUnitId => Platform.isAndroid
-      ? GameConstants.androidRewardedId
-      : GameConstants.iosRewardedId;
+    String get _rewardedAdUnitId =>
+      defaultTargetPlatform == TargetPlatform.android
+        ? GameConstants.androidRewardedId
+        : GameConstants.iosRewardedId;
 
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
+
+    if (!_isAdsPlatformSupported) {
+      _adsEnabled = false;
+      _isInterstitialReady = false;
+      _isRewardedReady = false;
+      onRewardedReadyChanged?.call(false);
+      return;
+    }
 
     // Start monotonic session clock immediately
     _sessionClock.start();
@@ -143,7 +158,7 @@ class AdService {
   }
 
   void _preloadInterstitial() {
-    if (!_adsEnabled) return;
+    if (!_adsEnabled || !_isAdsPlatformSupported) return;
 
     InterstitialAd.load(
       adUnitId: _interstitialAdUnitId,
@@ -195,7 +210,7 @@ class AdService {
   }
 
   void _preloadRewarded() {
-    if (!_adsEnabled) return;
+    if (!_adsEnabled || !_isAdsPlatformSupported) return;
 
     RewardedAd.load(
       adUnitId: _rewardedAdUnitId,
@@ -250,7 +265,7 @@ class AdService {
     VoidCallback? onAdOpened,
     VoidCallback? onAdClosed,
   }) async {
-    if (!_adsEnabled) return false;
+    if (!_adsEnabled || !_isAdsPlatformSupported) return false;
 
     // Bail if an ad is already on screen
     if (_interstitialOnScreen) return false;
@@ -278,7 +293,10 @@ class AdService {
   /// Internal: display the interstitial. Does NOT touch the timer.
   /// Timer is reset ONLY in onAdDismissedFullScreenContent.
   Future<bool> _showInterstitial() async {
-    if (!_adsEnabled || !_isInterstitialReady || _interstitialAd == null) {
+    if (!_adsEnabled ||
+        !_isAdsPlatformSupported ||
+        !_isInterstitialReady ||
+        _interstitialAd == null) {
       return false;
     }
     if (_interstitialOnScreen) return false;
@@ -310,7 +328,10 @@ class AdService {
     required Function onRewarded,
     VoidCallback? onDismissed,
   }) async {
-    if (!_adsEnabled || !_isRewardedReady || _rewardedAd == null) {
+    if (!_adsEnabled ||
+        !_isAdsPlatformSupported ||
+        !_isRewardedReady ||
+        _rewardedAd == null) {
       return false;
     }
     try {

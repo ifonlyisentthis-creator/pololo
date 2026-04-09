@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:polarity/core/constants.dart';
+import 'package:polarity/features/menu/screens/menu_screen.dart';
 import 'package:polarity/providers/providers.dart';
 
 class DeathScreen extends ConsumerStatefulWidget {
@@ -317,15 +318,7 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
                                     icon: Icons.home_outlined,
                                     label: 'MENU',
                                     color: fgColor,
-                                    onTap: () {
-                                      ref
-                                          .read(audioServiceProvider)
-                                          .play('menu');
-                                      // Pop back to menu (first route) without
-                                      // showing intermediate screens
-                                      Navigator.of(context)
-                                          .popUntil((route) => route.isFirst);
-                                    },
+                                    onTap: _goToMenu,
                                   ),
                                 ],
                               ),
@@ -413,6 +406,29 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
       score: widget.score,
       highScore: widget.highScore,
       roast: widget.deathMessage,
+    );
+  }
+
+  void _goToMenu() {
+    if (_actionInProgress) return;
+    _actionInProgress = true;
+
+    ref.read(audioServiceProvider).play('menu');
+    ref.read(hapticServiceProvider).selectionClick();
+
+    if (!mounted) return;
+
+    // Replace the stack in one step to avoid flashing the game route while
+    // popping Death -> Game -> Menu.
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder(
+        opaque: true,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (ctx, animation, secondaryAnimation) =>
+            const MenuScreen(),
+      ),
+      (_) => false,
     );
   }
 }

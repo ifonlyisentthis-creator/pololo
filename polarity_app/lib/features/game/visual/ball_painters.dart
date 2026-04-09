@@ -6,6 +6,15 @@ import 'visual_theme.dart';
 class BallPainters {
   BallPainters._();
 
+  static final Map<int, Map<double, Path>> _cachedPaths =
+      <int, Map<double, Path>>{};
+  static int _cachedPathCount = 0;
+  static final Path _pathA = Path();
+  static final Path _pathB = Path();
+
+  static const List<int> _branchDirections = <int>[-1, 1];
+  static const List<double> _leafVeinOffsets = <double>[-0.35, 0.0, 0.35];
+
   static void draw(BallShape shape, Canvas canvas, double radius,
       List<Color> colors, double glowPhase, double intensity) {
     switch (shape) {
@@ -63,20 +72,43 @@ class BallPainters {
   static Color _safeColor(List<Color> colors, int index) =>
       colors[index.clamp(0, colors.length - 1)];
 
-  static List<Offset> _regularPolygon(int sides, double r,
-      {double rotation = -pi / 2}) {
-    final step = 2 * pi / sides;
-    return List.generate(
-        sides, (i) => Offset(r * cos(rotation + step * i), r * sin(rotation + step * i)));
+  static Path _getCachedPath(
+      int shapeKey, double radius, void Function(Path path) builder) {
+    Map<double, Path>? perRadius = _cachedPaths[shapeKey];
+    final cached = perRadius?[radius];
+    if (cached != null) {
+      return cached;
+    }
+
+    if (_cachedPathCount >= 96) {
+      _cachedPaths.clear();
+      _cachedPathCount = 0;
+      perRadius = null;
+    }
+
+    perRadius ??= _cachedPaths.putIfAbsent(shapeKey, () => <double, Path>{});
+    final path = Path();
+    builder(path);
+    perRadius[radius] = path;
+    _cachedPathCount++;
+    return path;
   }
 
-  static Path _pathFromVertices(List<Offset> verts) {
-    final p = Path()..moveTo(verts.first.dx, verts.first.dy);
-    for (var i = 1; i < verts.length; i++) {
-      p.lineTo(verts[i].dx, verts[i].dy);
+  static void _buildRegularPolygonPath(Path path, int sides, double r,
+      {double rotation = -pi / 2}) {
+    path.reset();
+    final step = 2 * pi / sides;
+    for (var i = 0; i < sides; i++) {
+      final angle = rotation + step * i;
+      final x = r * cos(angle);
+      final y = r * sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
-    p.close();
-    return p;
+    path.close();
   }
 
   static Paint _glowPaint(Color color, double sigma) {
@@ -118,8 +150,8 @@ class BallPainters {
 
   static void _drawHexagon(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
-    final verts = _regularPolygon(6, r);
-    final path = _pathFromVertices(verts);
+    final path =
+      _getCachedPath(1, r, (p) => _buildRegularPolygonPath(p, 6, r));
 
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
@@ -145,7 +177,8 @@ class BallPainters {
   static void _drawStar5(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
-    final path = _starPath(5, r, r * 0.4);
+    final path =
+      _getCachedPath(2, r, (p) => _buildStarPath(p, 5, r, r * 0.4));
 
     // Glow
     final glowP = _glowPaint(
@@ -171,8 +204,9 @@ class BallPainters {
     canvas.drawPath(path, tipP);
   }
 
-  static Path _starPath(int points, double outerR, double innerR) {
-    final path = Path();
+  static void _buildStarPath(
+      Path path, int points, double outerR, double innerR) {
+    path.reset();
     final step = pi / points;
     for (var i = 0; i < points * 2; i++) {
       final angle = -pi / 2 + step * i;
@@ -186,7 +220,6 @@ class BallPainters {
       }
     }
     path.close();
-    return path;
   }
 
   // ─── 4. Star6 ──────────────────────────────────────────────────────────
@@ -195,9 +228,13 @@ class BallPainters {
       double glowPhase, double intensity) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
-    final tri1 = _regularPolygon(3, r, rotation: -pi / 2);
-    final tri2 = _regularPolygon(3, r, rotation: pi / 2);
-    final path = Path.combine(PathOperation.union, _pathFromVertices(tri1), _pathFromVertices(tri2));
+    final path = _getCachedPath(3, r, (p) {
+      final tri1 = Path();
+      final tri2 = Path();
+      _buildRegularPolygonPath(tri1, 3, r, rotation: -pi / 2);
+      _buildRegularPolygonPath(tri2, 3, r, rotation: pi / 2);
+      p.addPath(Path.combine(PathOperation.union, tri1, tri2), Offset.zero);
+    });
 
     // Fill
     final gradient = RadialGradient(
@@ -220,8 +257,8 @@ class BallPainters {
 
   static void _drawPentagon(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
-    final verts = _regularPolygon(5, r);
-    final path = _pathFromVertices(verts);
+    final path =
+      _getCachedPath(4, r, (p) => _buildRegularPolygonPath(p, 5, r));
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
     // Fill
@@ -246,12 +283,14 @@ class BallPainters {
   static void _drawDiamond(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
-    final path = Path()
-      ..moveTo(0, -r * 1.2)
-      ..lineTo(r * 0.9, 0)
-      ..lineTo(0, r * 1.2)
-      ..lineTo(-r * 0.9, 0)
-      ..close();
+    final path = _getCachedPath(5, r, (p) {
+      p
+        ..moveTo(0, -r * 1.2)
+        ..lineTo(r * 0.9, 0)
+        ..lineTo(0, r * 1.2)
+        ..lineTo(-r * 0.9, 0)
+        ..close();
+    });
 
     // Fill
     final gradient = RadialGradient(
@@ -283,29 +322,30 @@ class BallPainters {
   static void _drawGear(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
-    const teeth = 8;
-    final innerR = r * 0.7;
-    final outerR = r;
-    final toothW = pi / (teeth * 2.5);
+    final path = _getCachedPath(6, r, (p) {
+      const teeth = 8;
+      final innerR = r * 0.7;
+      final outerR = r;
+      final toothW = pi / (teeth * 2.5);
 
-    final path = Path();
-    for (var i = 0; i < teeth; i++) {
-      final angle = 2 * pi * i / teeth;
-      final a1 = angle - toothW;
-      final a2 = angle + toothW;
-      final mid1 = angle - toothW * 1.6;
-      final mid2 = angle + toothW * 1.6;
+      for (var i = 0; i < teeth; i++) {
+        final angle = 2 * pi * i / teeth;
+        final a1 = angle - toothW;
+        final a2 = angle + toothW;
+        final mid1 = angle - toothW * 1.6;
+        final mid2 = angle + toothW * 1.6;
 
-      if (i == 0) {
-        path.moveTo(innerR * cos(mid1), innerR * sin(mid1));
-      } else {
-        path.lineTo(innerR * cos(mid1), innerR * sin(mid1));
+        if (i == 0) {
+          p.moveTo(innerR * cos(mid1), innerR * sin(mid1));
+        } else {
+          p.lineTo(innerR * cos(mid1), innerR * sin(mid1));
+        }
+        p.lineTo(outerR * cos(a1), outerR * sin(a1));
+        p.lineTo(outerR * cos(a2), outerR * sin(a2));
+        p.lineTo(innerR * cos(mid2), innerR * sin(mid2));
       }
-      path.lineTo(outerR * cos(a1), outerR * sin(a1));
-      path.lineTo(outerR * cos(a2), outerR * sin(a2));
-      path.lineTo(innerR * cos(mid2), innerR * sin(mid2));
-    }
-    path.close();
+      p.close();
+    });
 
     // Fill
     final gradient = RadialGradient(
@@ -335,11 +375,15 @@ class BallPainters {
       double glowPhase, double intensity) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
-    final mainCircle = Path()
-      ..addOval(Rect.fromCircle(center: Offset.zero, radius: r));
-    final subtracted = Path()
-      ..addOval(Rect.fromCircle(center: Offset(r * 0.5, 0), radius: r * 0.85));
-    final path = Path.combine(PathOperation.difference, mainCircle, subtracted);
+    final path = _getCachedPath(7, r, (p) {
+      final mainCircle = Path()
+        ..addOval(Rect.fromCircle(center: Offset.zero, radius: r));
+      final subtracted = Path()
+        ..addOval(Rect.fromCircle(center: Offset(r * 0.5, 0), radius: r * 0.85));
+      p.addPath(
+          Path.combine(PathOperation.difference, mainCircle, subtracted),
+          Offset.zero);
+    });
 
     // Outer glow
     final glowP = _glowPaint(
@@ -374,17 +418,19 @@ class BallPainters {
     final w = r * 1.1;
     final h = r * 1.2;
 
-    final path = Path()
-      ..moveTo(-w, h * 0.35) // bottom-left
-      ..lineTo(-w, -h * 0.1) // left wall up
-      ..lineTo(-w * 0.5, h * 0.1) // first valley
-      ..lineTo(-w * 0.25, -h * 0.5) // left peak
-      ..lineTo(0, h * 0.05) // center valley
-      ..lineTo(w * 0.25, -h * 0.5) // center peak
-      ..lineTo(w * 0.5, h * 0.1) // right valley
-      ..lineTo(w, -h * 0.1) // right wall up
-      ..lineTo(w, h * 0.35) // bottom-right
-      ..close();
+    final path = _getCachedPath(8, r, (p) {
+      p
+        ..moveTo(-w, h * 0.35) // bottom-left
+        ..lineTo(-w, -h * 0.1) // left wall up
+        ..lineTo(-w * 0.5, h * 0.1) // first valley
+        ..lineTo(-w * 0.25, -h * 0.5) // left peak
+        ..lineTo(0, h * 0.05) // center valley
+        ..lineTo(w * 0.25, -h * 0.5) // center peak
+        ..lineTo(w * 0.5, h * 0.1) // right valley
+        ..lineTo(w, -h * 0.1) // right wall up
+        ..lineTo(w, h * 0.35) // bottom-right
+        ..close();
+    });
 
     // Fill
     final gradient = RadialGradient(
@@ -417,20 +463,22 @@ class BallPainters {
       double glowPhase, double intensity) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final a = r * 0.3; // half arm width
-    final path = Path()
-      ..moveTo(-a, -r)
-      ..lineTo(a, -r)
-      ..lineTo(a, -a)
-      ..lineTo(r, -a)
-      ..lineTo(r, a)
-      ..lineTo(a, a)
-      ..lineTo(a, r)
-      ..lineTo(-a, r)
-      ..lineTo(-a, a)
-      ..lineTo(-r, a)
-      ..lineTo(-r, -a)
-      ..lineTo(-a, -a)
-      ..close();
+    final path = _getCachedPath(9, r, (p) {
+      p
+        ..moveTo(-a, -r)
+        ..lineTo(a, -r)
+        ..lineTo(a, -a)
+        ..lineTo(r, -a)
+        ..lineTo(r, a)
+        ..lineTo(a, a)
+        ..lineTo(a, r)
+        ..lineTo(-a, r)
+        ..lineTo(-a, a)
+        ..lineTo(-r, a)
+        ..lineTo(-r, -a)
+        ..lineTo(-a, -a)
+        ..close();
+    });
 
     // Fill
     final gradient = RadialGradient(
@@ -466,33 +514,39 @@ class BallPainters {
     final backRight = Offset(s, -s * 0.7);
 
     // Top face (brightest)
-    final topFace = Path()
-      ..moveTo(top.dx, top.dy)
-      ..lineTo(backRight.dx, backRight.dy)
-      ..lineTo(0, -s * 0.05)
-      ..lineTo(backLeft.dx, backLeft.dy)
-      ..close();
+    final topFace = _getCachedPath(10, r, (p) {
+      p
+        ..moveTo(top.dx, top.dy)
+        ..lineTo(backRight.dx, backRight.dy)
+        ..lineTo(0, -s * 0.05)
+        ..lineTo(backLeft.dx, backLeft.dy)
+        ..close();
+    });
     final fillP = Paint()
       ..color = Color.lerp(base, Colors.white, 0.25 * glow)!;
     canvas.drawPath(topFace, fillP);
 
     // Left face (medium)
-    final leftFace = Path()
-      ..moveTo(backLeft.dx, backLeft.dy)
-      ..lineTo(0, -s * 0.05)
-      ..lineTo(bottom.dx, bottom.dy)
-      ..lineTo(left.dx, left.dy)
-      ..close();
+    final leftFace = _getCachedPath(11, r, (p) {
+      p
+        ..moveTo(backLeft.dx, backLeft.dy)
+        ..lineTo(0, -s * 0.05)
+        ..lineTo(bottom.dx, bottom.dy)
+        ..lineTo(left.dx, left.dy)
+        ..close();
+    });
     fillP.color = Color.lerp(base, Colors.black, 0.15)!;
     canvas.drawPath(leftFace, fillP);
 
     // Right face (darkest)
-    final rightFace = Path()
-      ..moveTo(backRight.dx, backRight.dy)
-      ..lineTo(0, -s * 0.05)
-      ..lineTo(bottom.dx, bottom.dy)
-      ..lineTo(right.dx, right.dy)
-      ..close();
+    final rightFace = _getCachedPath(12, r, (p) {
+      p
+        ..moveTo(backRight.dx, backRight.dy)
+        ..lineTo(0, -s * 0.05)
+        ..lineTo(bottom.dx, bottom.dy)
+        ..lineTo(right.dx, right.dy)
+        ..close();
+    });
     fillP.color = Color.lerp(base, Colors.black, 0.35)!;
     canvas.drawPath(rightFace, fillP);
 
@@ -511,7 +565,7 @@ class BallPainters {
   static void _drawSpiral(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
-    final path = Path();
+    final path = _pathA..reset();
     const totalAngle = 4 * pi;
     const steps = 40;
 
@@ -557,11 +611,13 @@ class BallPainters {
     final h = r * 0.75;
 
     // Vesica piscis - upper and lower arcs
-    final eyePath = Path()
-      ..moveTo(-w, 0)
-      ..quadraticBezierTo(0, -h * 1.6, w, 0)
-      ..quadraticBezierTo(0, h * 1.6, -w, 0)
-      ..close();
+    final eyePath = _getCachedPath(13, r, (p) {
+      p
+        ..moveTo(-w, 0)
+        ..quadraticBezierTo(0, -h * 1.6, w, 0)
+        ..quadraticBezierTo(0, h * 1.6, -w, 0)
+        ..close();
+    });
 
     // Outer glow
     final glowP = _glowPaint(
@@ -634,7 +690,7 @@ class BallPainters {
       // Branches at 60% out
       final branchBase = tip * 0.6;
       final branchLen = r * 0.3;
-      for (final dir in [-1, 1]) {
+      for (final dir in _branchDirections) {
         final branchAngle = angle + dir * pi / 3;
         final branchTip = branchBase +
             Offset(branchLen * cos(branchAngle), branchLen * sin(branchAngle));
@@ -654,14 +710,16 @@ class BallPainters {
   static void _drawBolt(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
-    final path = Path()
-      ..moveTo(r * 0.15, -r * 1.1)
-      ..lineTo(-r * 0.55, -r * 0.05)
-      ..lineTo(-r * 0.05, -r * 0.05)
-      ..lineTo(-r * 0.15, r * 1.1)
-      ..lineTo(r * 0.55, r * 0.05)
-      ..lineTo(r * 0.05, r * 0.05)
-      ..close();
+    final path = _getCachedPath(14, r, (p) {
+      p
+        ..moveTo(r * 0.15, -r * 1.1)
+        ..lineTo(-r * 0.55, -r * 0.05)
+        ..lineTo(-r * 0.05, -r * 0.05)
+        ..lineTo(-r * 0.15, r * 1.1)
+        ..lineTo(r * 0.55, r * 0.05)
+        ..lineTo(r * 0.05, r * 0.05)
+        ..close();
+    });
 
     // Outer glow
     final glowP = _glowPaint(
@@ -694,8 +752,8 @@ class BallPainters {
   static void _drawPrism(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
-    final verts = _regularPolygon(3, r);
-    final path = _pathFromVertices(verts);
+    final path =
+      _getCachedPath(15, r, (p) => _buildRegularPolygonPath(p, 3, r));
 
     // Fill
     final gradient = RadialGradient(
@@ -711,7 +769,7 @@ class BallPainters {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.6
       ..color = Colors.white.withValues(alpha: 0.2 * glow);
-    canvas.drawLine(verts[0], Offset(0, r * 0.3), lineP);
+    canvas.drawLine(Offset(0, -r), Offset(0, r * 0.3), lineP);
 
     // Stroke
     final strokeP = Paint()
@@ -726,11 +784,13 @@ class BallPainters {
   static void _drawLeaf(Canvas canvas, double r, List<Color> colors,
       double glowPhase, double intensity) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
-    final path = Path()
-      ..moveTo(0, -r * 1.1)
-      ..cubicTo(r * 0.9, -r * 0.7, r * 0.9, r * 0.5, 0, r * 1.1)
-      ..cubicTo(-r * 0.9, r * 0.5, -r * 0.9, -r * 0.7, 0, -r * 1.1)
-      ..close();
+    final path = _getCachedPath(16, r, (p) {
+      p
+        ..moveTo(0, -r * 1.1)
+        ..cubicTo(r * 0.9, -r * 0.7, r * 0.9, r * 0.5, 0, r * 1.1)
+        ..cubicTo(-r * 0.9, r * 0.5, -r * 0.9, -r * 0.7, 0, -r * 1.1)
+        ..close();
+    });
 
     // Fill
     final gradient = RadialGradient(
@@ -754,7 +814,7 @@ class BallPainters {
     // Side veins
     veinP.strokeWidth = 0.6;
     veinP.color = Colors.white.withValues(alpha: 0.2 * glow);
-    for (final dy in [-0.35, 0.0, 0.35]) {
+    for (final dy in _leafVeinOffsets) {
       canvas.drawLine(Offset(0, r * dy), Offset(r * 0.4, r * (dy - 0.2)), veinP);
       canvas.drawLine(Offset(0, r * dy), Offset(-r * 0.4, r * (dy - 0.2)), veinP);
     }
@@ -933,8 +993,8 @@ class BallPainters {
       double glowPhase, double intensity) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     const steps = 30;
-    final path1 = Path();
-    final path2 = Path();
+    final path1 = _pathA..reset();
+    final path2 = _pathB..reset();
 
     for (var i = 0; i <= steps; i++) {
       final t = i / steps;

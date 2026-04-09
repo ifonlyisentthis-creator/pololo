@@ -13,6 +13,7 @@ class SettingsScreen extends ConsumerWidget {
     final hapticsOn = ref.watch(hapticsEnabledProvider);
     final audioOn = ref.watch(audioEnabledProvider);
     final adsOn = ref.watch(adsEnabledProvider);
+    final rememberTheme = ref.watch(rememberThemeAcrossLaunchesProvider);
     final bgColor = isDark ? Colors.black : Colors.white;
     final fgColor = isDark ? Colors.white : Colors.black;
 
@@ -130,6 +131,29 @@ class SettingsScreen extends ConsumerWidget {
                           ref.read(easyModeProvider.notifier).state = val;
                           ref.read(storageServiceProvider).setEasyMode(val);
                           ref.read(gameEngineProvider).easyMode = val;
+                          ref.read(hapticServiceProvider).selectionClick();
+                        },
+                      ),
+
+                      _divider(fgColor),
+
+                      // Remember active theme across app relaunch
+                      _SettingsTile(
+                        label: 'REMEMBER THEME',
+                        description: rememberTheme
+                            ? 'ON (REOPEN KEEP)'
+                            : 'OFF (SESSION ONLY)',
+                        value: rememberTheme,
+                        fgColor: fgColor,
+                        onChanged: (val) {
+                          ref
+                              .read(rememberThemeAcrossLaunchesProvider.notifier)
+                              .state = val;
+                          final storage = ref.read(storageServiceProvider);
+                          storage.setRememberThemeAcrossLaunches(val);
+                          if (!val) {
+                            storage.clearActiveTheme();
+                          }
                           ref.read(hapticServiceProvider).selectionClick();
                         },
                       ),

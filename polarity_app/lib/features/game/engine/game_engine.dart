@@ -39,6 +39,7 @@ class GameEngine {
 
   // Obstacle spawning
   bool _nextFromLeft = true;
+  double _nextObstacleSpawnY = 0;
 
   // Revive
   int countdownValue = 3;
@@ -167,6 +168,9 @@ class GameEngine {
 
   static const double playerYFraction = 0.3;
 
+  double get _offscreenSpawnStartY =>
+      screenHeight + GameConstants.obstacleSpacing * 0.6;
+
   GameEngine() {
     player = Player(x: 0, y: 0);
     ScoreGuard.initialize();
@@ -192,7 +196,6 @@ class GameEngine {
   }
 
   void startGame() {
-    obstacles.clear();
     particles.clear();
     magnetParticles.clear();
     trailParticles.clear();
@@ -247,6 +250,7 @@ class GameEngine {
     player.velocityX = 0;
     player.isAlive = true;
     player.glowPhase = 0;
+    _seedInitialObstaclesFromBottom();
 
     // Procedural randomization per restart
     trailLengthSeed = 0.7 + _rng.nextDouble() * 0.6;
@@ -312,7 +316,8 @@ class GameEngine {
 
     // Bug fix 9: Remove nearby obstacles that would immediately collide
     final safeZone = GameConstants.obstacleSpacing * 0.5;
-    obstacles.removeWhere((obs) => (obs.worldY - player.y).abs() < safeZone);
+    _removeObstaclesNearPlayer(safeZone);
+    _resetObstacleSpawnCursor();
   }
 
   void pause() {
@@ -401,32 +406,9 @@ class GameEngine {
     // Always clamp inside walls (safety net)
     player.x = player.x.clamp(pr + 1, screenWidth - pr - 1);
 
-    // ── Scroll obstacles upward ──
+    // ── Scroll obstacles + scoring + recycle (single pass) ──
     final scrollSpeed = GameConstants.baseScrollSpeed * speedMult;
-    for (final obs in obstacles) {
-      obs.worldY -= scrollSpeed * dt;
-    }
-
-    // ── Scoring ──
-    for (final obs in obstacles) {
-      if (!obs.passed && obs.worldY < player.y - GameConstants.playerRadius) {
-        obs.passed = true;
-        score++;
-        ScoreGuard.setScore(score);
-        _updatePhase();
-        _checkShieldAward();
-        _checkEliteUnlock();
-        _checkMilestone();
-        _checkThemeTransition();
-        _updateNearHighScore();
-
-        // Score micro-burst particles at obstacle tip
-        _spawnScoreParticles(obs);
-      }
-    }
-
-    // ── Recycle obstacles ──
-    obstacles.removeWhere((o) => o.worldY < -100);
+    _advanceObstacles(scrollSpeed * dt, allowScoring: true);
 
     // ── Generate obstacles (after safe spawn delay) ──
     if (gameTime >= GameConstants.safeSpawnDelay) {
@@ -469,20 +451,28 @@ class GameEngine {
         currentPhase >= GameConstants.phaseThresholds.length - 1;
 
     // ── Update particles ──
-    for (final p in magnetParticles) {
-      p.update(dt);
-    }
-    magnetParticles.removeWhere((p) => p.isDead);
-    for (final p in trailParticles) {
-      p.update(dt);
-    }
-    trailParticles.removeWhere((p) => p.isDead);
+    final velocityDamping = pow(0.3, dt).toDouble();
+    final radiusDamping = pow(0.75, dt).toDouble();
+    _updateAndCullParticles(
+      magnetParticles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
+    _updateAndCullParticles(
+      trailParticles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
 
     // ── Shield break / misc particles (must update during playing too) ──
-    for (final p in particles) {
-      p.update(dt);
-    }
-    particles.removeWhere((p) => p.isDead);
+    _updateAndCullParticles(
+      particles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
 
     // ── VFX timers ──
     if (phaseRingTimer > 0) phaseRingTimer -= dt;
@@ -529,38 +519,49 @@ class GameEngine {
     // Keep obstacles scrolling and ambient alive during countdown
     final speedMult = _getSpeedMultiplier();
     final scrollSpeed = GameConstants.baseScrollSpeed * speedMult;
-    for (final obs in obstacles) {
-      obs.worldY -= scrollSpeed * dt;
-    }
-    obstacles.removeWhere((o) => o.worldY < -100);
+    _advanceObstacles(scrollSpeed * dt, allowScoring: false);
     _updateAmbientParticles(dt);
 
     // Fade out any leftover trail/magnet particles
-    for (final p in trailParticles) {
-      p.update(dt);
-    }
-    trailParticles.removeWhere((p) => p.isDead);
-    for (final p in magnetParticles) {
-      p.update(dt);
-    }
-    magnetParticles.removeWhere((p) => p.isDead);
+    final velocityDamping = pow(0.3, dt).toDouble();
+    final radiusDamping = pow(0.75, dt).toDouble();
+    _updateAndCullParticles(
+      trailParticles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
+    _updateAndCullParticles(
+      magnetParticles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
   }
 
   void _updateDead(double dt) {
-    for (final p in particles) {
-      p.update(dt);
-    }
-    particles.removeWhere((p) => p.isDead);
+    final velocityDamping = pow(0.3, dt).toDouble();
+    final radiusDamping = pow(0.75, dt).toDouble();
+    _updateAndCullParticles(
+      particles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
 
     // Fade out leftover trail/magnet particles from last frame of playing
-    for (final p in trailParticles) {
-      p.update(dt);
-    }
-    trailParticles.removeWhere((p) => p.isDead);
-    for (final p in magnetParticles) {
-      p.update(dt);
-    }
-    magnetParticles.removeWhere((p) => p.isDead);
+    _updateAndCullParticles(
+      trailParticles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
+    _updateAndCullParticles(
+      magnetParticles,
+      dt,
+      velocityDamping,
+      radiusDamping,
+    );
 
     // ── Death VFX timers ──
     if (deathFlashTimer > 0) deathFlashTimer -= dt;
@@ -585,9 +586,11 @@ class GameEngine {
 
   // ── Ambient background particles ──
 
+  static const int _ambientTargetCount = 25;
+
   void _initAmbientParticles() {
     ambientParticles.clear();
-    for (int i = 0; i < 25; i++) {
+    for (int i = 0; i < _ambientTargetCount; i++) {
       _spawnOneAmbientParticle(randomizeLife: true);
     }
   }
@@ -614,14 +617,110 @@ class GameEngine {
   }
 
   void _updateAmbientParticles(double dt) {
-    for (final p in ambientParticles) {
+    int write = 0;
+    for (int i = 0; i < ambientParticles.length; i++) {
+      final p = ambientParticles[i];
       p.x += p.velocityX * dt;
       p.y += p.velocityY * dt;
       p.life -= dt;
+      if (!p.isDead && p.y >= -20) {
+        ambientParticles[write++] = p;
+      }
     }
-    ambientParticles.removeWhere((p) => p.isDead || p.y < -20);
-    while (ambientParticles.length < 25) {
+    if (write < ambientParticles.length) {
+      ambientParticles.removeRange(write, ambientParticles.length);
+    }
+    while (ambientParticles.length < _ambientTargetCount) {
       _spawnOneAmbientParticle();
+    }
+  }
+
+  void _updateAndCullParticles(
+    List<Particle> source,
+    double dt,
+    double velocityDamping,
+    double radiusDamping,
+  ) {
+    int write = 0;
+    for (int i = 0; i < source.length; i++) {
+      final p = source[i];
+      p.updateWithDamping(dt, velocityDamping, radiusDamping);
+      if (!p.isDead) {
+        source[write++] = p;
+      }
+    }
+    if (write < source.length) {
+      source.removeRange(write, source.length);
+    }
+  }
+
+  void _advanceObstacles(double scrollDelta, {required bool allowScoring}) {
+    if (obstacles.isEmpty) {
+      _nextObstacleSpawnY = _offscreenSpawnStartY;
+    } else {
+      _nextObstacleSpawnY -= scrollDelta;
+    }
+    final scoreLineY = player.y - GameConstants.playerRadius;
+    int write = 0;
+    for (int i = 0; i < obstacles.length; i++) {
+      final obs = obstacles[i];
+      obs.worldY -= scrollDelta;
+
+      if (allowScoring && !obs.passed && obs.worldY < scoreLineY) {
+        obs.passed = true;
+        score++;
+        ScoreGuard.setScore(score);
+        _updatePhase();
+        _checkShieldAward();
+        _checkEliteUnlock();
+        _checkMilestone();
+        _checkThemeTransition();
+        _updateNearHighScore();
+
+        // Score micro-burst particles at obstacle tip.
+        _spawnScoreParticles(obs);
+      }
+
+      if (obs.worldY >= -100) {
+        obstacles[write++] = obs;
+      }
+    }
+
+    if (write < obstacles.length) {
+      obstacles.removeRange(write, obstacles.length);
+    }
+  }
+
+  void _removeObstaclesNearPlayer(double safeZone) {
+    int write = 0;
+    for (int i = 0; i < obstacles.length; i++) {
+      final obs = obstacles[i];
+      if ((obs.worldY - player.y).abs() >= safeZone) {
+        obstacles[write++] = obs;
+      }
+    }
+    if (write < obstacles.length) {
+      obstacles.removeRange(write, obstacles.length);
+    }
+  }
+
+  void _resetObstacleSpawnCursor() {
+    _nextObstacleSpawnY = _offscreenSpawnStartY;
+    for (int i = 0; i < obstacles.length; i++) {
+      final y = obstacles[i].worldY;
+      if (y > _nextObstacleSpawnY) {
+        _nextObstacleSpawnY = y;
+      }
+    }
+  }
+
+  void _seedInitialObstaclesFromBottom() {
+    obstacles.clear();
+    _nextObstacleSpawnY = _offscreenSpawnStartY;
+    final bufferEnd = screenHeight + screenHeight * 1.5;
+    while (_nextObstacleSpawnY < bufferEnd) {
+      _addObstacle(_nextObstacleSpawnY);
+      _nextObstacleSpawnY += _jitteredSpacing();
     }
   }
 
@@ -672,7 +771,8 @@ class GameEngine {
     // This method only checks obstacle collision.
 
     // Obstacle collision
-    for (final obs in obstacles) {
+    for (int i = 0; i < obstacles.length; i++) {
+      final obs = obstacles[i];
       final obsTop = obs.worldY - obs.thickness / 2;
       final obsBottom = obs.worldY + obs.thickness / 2;
       final playerTop = player.y - pr;
@@ -935,17 +1035,11 @@ class GameEngine {
   }
 
   void _generateObstaclesIfNeeded() {
-    // Find the lowest obstacle (highest worldY = furthest below screen)
-    double lowestY = player.y;
-    for (final obs in obstacles) {
-      if (obs.worldY > lowestY) lowestY = obs.worldY;
-    }
     // Keep a buffer of obstacles extending ~1.5 screens below
     final bufferEnd = screenHeight + screenHeight * 0.5;
-    double nextY = lowestY + _jitteredSpacing();
-    while (nextY < bufferEnd) {
-      _addObstacle(nextY);
-      nextY += _jitteredSpacing();
+    while (_nextObstacleSpawnY < bufferEnd) {
+      _nextObstacleSpawnY += _jitteredSpacing();
+      _addObstacle(_nextObstacleSpawnY);
     }
   }
 

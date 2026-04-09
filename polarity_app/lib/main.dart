@@ -71,7 +71,7 @@ Future<void> main() async {
 
   // Restore active theme from storage (persists across app restart)
   final savedTier = storage.activeThemeTier;
-  if (savedTier > 0) {
+  if (storage.rememberThemeAcrossLaunches && savedTier > 0) {
     engine.activeTheme = ThemeRegistry.restoreTheme(
       savedTier,
       storage.activeThemeVariation,

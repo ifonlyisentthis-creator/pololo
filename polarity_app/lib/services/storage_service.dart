@@ -15,6 +15,8 @@ class StorageService {
   static const _lastPlayDateKey = 'last_play_date';
   static const _highScoreModeKey = 'hs_mode';
   static const _themeRotationsKey = 'theme_rotations';
+  static const _rememberThemeAcrossLaunchesKey =
+      'remember_theme_across_launches';
   static const _activeThemeTierKey = 'active_theme_tier';
   static const _activeThemeVarKey = 'active_theme_var';
   static const _activeThemeScoreKey = 'active_theme_score';
@@ -95,6 +97,12 @@ class StorageService {
   String get themeRotationsJson => _prefs.getString(_themeRotationsKey) ?? '';
   Future<void> setThemeRotationsJson(String json) =>
       _prefs.setString(_themeRotationsKey, json);
+
+    // --- Remember active theme across app relaunch ---
+    bool get rememberThemeAcrossLaunches =>
+      _prefs.getBool(_rememberThemeAcrossLaunchesKey) ?? true;
+    Future<void> setRememberThemeAcrossLaunches(bool value) =>
+      _prefs.setBool(_rememberThemeAcrossLaunchesKey, value);
 
   // --- Active Theme Persistence ---
   int get activeThemeTier => _prefs.getInt(_activeThemeTierKey) ?? 0;

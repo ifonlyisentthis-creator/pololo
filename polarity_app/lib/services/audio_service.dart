@@ -8,8 +8,15 @@ import 'package:audioplayers/audioplayers.dart';
 class AudioService {
   final Map<String, AudioPlayer> _players = {};
   final Map<String, Uint8List> _cachedBytes = {};
+  final Map<String, int> _lastPlayMicros = {};
   bool enabled = true;
   bool _initialized = false;
+
+  static const Map<String, int> _minPlayGapMs = {
+    'score': 28,
+    'tap': 20,
+    'menu': 30,
+  };
 
   Future<void> init() async {
     if (_initialized) return;
@@ -30,6 +37,7 @@ class AudioService {
 
     // Pre-create players for each SFX
     for (final key in _cachedBytes.keys) {
+      // Keep default player mode for broad compatibility with in-memory WAV bytes.
       _players[key] = AudioPlayer();
     }
   }
@@ -42,6 +50,17 @@ class AudioService {
     try {
       final player = _players[sfxName];
       if (player == null) return;
+      final now = DateTime.now().microsecondsSinceEpoch;
+      final minGapMs = _minPlayGapMs[sfxName];
+      final lastMicros = _lastPlayMicros[sfxName];
+      if (minGapMs != null &&
+          lastMicros != null &&
+          now - lastMicros < minGapMs * 1000) {
+        return;
+      }
+      _lastPlayMicros[sfxName] = now;
+
+      // Ensure repeated rapid plays reliably retrigger the same player instance.
       await player.stop();
       await player.play(BytesSource(bytes));
     } catch (_) {
@@ -55,6 +74,7 @@ class AudioService {
     }
     _players.clear();
     _cachedBytes.clear();
+    _lastPlayMicros.clear();
     _initialized = false;
   }
 

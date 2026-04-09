@@ -27,12 +27,19 @@ class Particle {
   bool get isDead => life <= 0;
 
   void update(double dt) {
+    final velocityDamping = pow(0.3, dt).toDouble();
+    final radiusDamping = pow(0.75, dt).toDouble();
+    updateWithDamping(dt, velocityDamping, radiusDamping);
+  }
+
+  void updateWithDamping(
+      double dt, double velocityDamping, double radiusDamping) {
     velocityY += gravity * dt;
     x += velocityX * dt;
     y += velocityY * dt;
-    velocityX *= pow(0.3, dt).toDouble();
-    velocityY *= pow(0.3, dt).toDouble();
+    velocityX *= velocityDamping;
+    velocityY *= velocityDamping;
     life -= dt;
-    radius *= pow(0.75, dt).toDouble();
+    radius *= radiusDamping;
   }
 }

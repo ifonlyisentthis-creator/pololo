@@ -6,6 +6,8 @@ import 'package:polarity/features/game/engine/game_engine.dart';
 import 'package:polarity/features/game/painters/game_painter.dart';
 import 'package:polarity/features/death/screens/death_screen.dart';
 import 'package:polarity/providers/providers.dart';
+import 'package:polarity/services/audio_service.dart';
+import 'package:polarity/services/haptic_service.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -18,11 +20,19 @@ class _GameScreenState extends ConsumerState<GameScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late Ticker _ticker;
   Duration _lastTime = Duration.zero;
+  double _accumulator = 0;
   late GameEngine _engine;
+  late AudioService _audio;
+  late HapticService _haptics;
   int _lastScore = -1;
   int _lastPhase = -1;
   bool _deathScreenShown = false;
   int _lastTutorialBucket = -1;
+
+  // Fixed-step simulation gives stable physics and smoother pacing under load.
+  static const double _fixedTimeStep = 1.0 / 120.0;
+  static const double _maxFrameDelta = 0.1;
+  static const int _maxSubSteps = 8;
 
   // Repaint notifier — triggers only the CustomPaint, not the entire widget tree
   final _repaintNotifier = _GameRepaintNotifier();
@@ -32,6 +42,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _engine = ref.read(gameEngineProvider);
+    _audio = ref.read(audioServiceProvider);
+    _haptics = ref.read(hapticServiceProvider);
+
     _ticker = createTicker(_onTick);
     _ticker.start();
 
@@ -72,10 +85,24 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _lastTime = elapsed;
       return;
     }
-    final dt = (elapsed - _lastTime).inMicroseconds / 1000000.0;
+    var dt = (elapsed - _lastTime).inMicroseconds / 1000000.0;
     _lastTime = elapsed;
+    if (dt <= 0) return;
+    if (dt > _maxFrameDelta) dt = _maxFrameDelta;
 
-    _engine.update(dt);
+    _accumulator += dt;
+    int subSteps = 0;
+    while (_accumulator >= _fixedTimeStep && subSteps < _maxSubSteps) {
+      _engine.update(_fixedTimeStep);
+      _accumulator -= _fixedTimeStep;
+      subSteps++;
+    }
+    if (subSteps == _maxSubSteps) {
+      // Drop excess backlog to avoid catch-up spirals after long frame stalls.
+      _accumulator = 0;
+    }
+
+    bool rebuildHud = false;
 
     // Notify only the CustomPaint to repaint — avoids rebuilding the entire widget tree
     _repaintNotifier.notify();
@@ -83,11 +110,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (_engine.score != _lastScore) {
       _lastScore = _engine.score;
       _onScoreChanged();
+      rebuildHud = true;
     }
 
     if (_engine.currentPhase != _lastPhase) {
       if (_lastPhase >= 0) _onPhaseChanged();
       _lastPhase = _engine.currentPhase;
+      rebuildHud = true;
     }
 
     if (_engine.state == GameState.dead && !_deathScreenShown) {
@@ -98,20 +127,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // Shield event polling
     if (_engine.shieldJustBroke) {
       _engine.shieldJustBroke = false;
-      ref.read(audioServiceProvider).play('shield_break');
-      ref.read(hapticServiceProvider).mediumImpact();
+      _audio.play('shield_break');
+      _haptics.mediumImpact();
     }
     if (_engine.shieldJustPickedUp) {
       _engine.shieldJustPickedUp = false;
-      ref.read(audioServiceProvider).play('shield_pickup');
-      ref.read(hapticServiceProvider).lightTap();
+      _audio.play('shield_pickup');
+      _haptics.lightTap();
     }
 
     // V2: Elite unlock event
     if (_engine.eliteJustUnlocked) {
       _engine.eliteJustUnlocked = false;
-      ref.read(audioServiceProvider).play('elite_unlock');
-      ref.read(hapticServiceProvider).heavyImpact();
+      _audio.play('elite_unlock');
+      _haptics.heavyImpact();
       // Persist
       ref.read(eliteUnlockedProvider.notifier).state = true;
       ref.read(storageServiceProvider).setEliteUnlocked(true);
@@ -120,27 +149,30 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // V2: High score matched heartbeat
     if (_engine.highScoreJustMatched) {
       _engine.highScoreJustMatched = false;
-      ref.read(hapticServiceProvider).heavyImpact();
+      _haptics.heavyImpact();
     }
 
     // V3: Theme activation event
     if (_engine.themeJustActivated) {
       _engine.themeJustActivated = false;
-      ref.read(audioServiceProvider).play('phase'); // reuse phase sound for now
-      ref.read(hapticServiceProvider).mediumImpact();
+      _audio.play('phase'); // reuse phase sound for now
+      _haptics.mediumImpact();
       // Persist rotation indices + active theme for app restart
       final storage = ref.read(storageServiceProvider);
       storage.setThemeRotationsJson(_engine.serializeThemeRotations());
       final at = _engine.activeTheme;
-      if (at != null) {
+      final rememberTheme = ref.read(rememberThemeAcrossLaunchesProvider);
+      if (rememberTheme && at != null) {
         storage.setActiveTheme(at.tier, at.variation, _engine.score);
+      } else {
+        storage.clearActiveTheme();
       }
     }
 
     // V4: Troll activation event
     if (_engine.trollSystem.trollJustActivated) {
       _engine.trollSystem.trollJustActivated = false;
-      ref.read(hapticServiceProvider).lightTap();
+      _haptics.lightTap();
     }
 
     // V4: Troll ended event
@@ -153,28 +185,29 @@ class _GameScreenState extends ConsumerState<GameScreen>
       final opBucket = (_engine.tutorialOpacity * 10).round();
       if (opBucket != _lastTutorialBucket) {
         _lastTutorialBucket = opBucket;
-        setState(() {});
+        rebuildHud = true;
       }
+    }
+
+    if (rebuildHud && mounted) {
+      setState(() {});
     }
   }
 
   void _onScoreChanged() {
-    // Trigger HUD rebuild for score text
-    if (mounted) setState(() {});
-    ref.read(audioServiceProvider).play('score');
-    ref.read(hapticServiceProvider).lightTap();
+    _audio.play('score');
+    _haptics.lightTap();
   }
 
   void _onPhaseChanged() {
-    if (mounted) setState(() {});
-    ref.read(audioServiceProvider).play('phase');
-    ref.read(hapticServiceProvider).phaseVibrate();
+    _audio.play('phase');
+    _haptics.phaseVibrate();
   }
 
   void _onDeath() {
     if (mounted) setState(() {});
-    ref.read(audioServiceProvider).play('death');
-    ref.read(hapticServiceProvider).heavyImpact();
+    _audio.play('death');
+    _haptics.heavyImpact();
 
     if (_engine.isNewHighScore) {
       final storage = ref.read(storageServiceProvider);
@@ -193,7 +226,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       final storage = ref.read(storageServiceProvider);
       storage.setMilestoneTier(_engine.currentTier);
       ref.read(milestoneTierProvider.notifier).state = _engine.currentTier;
-      ref.read(audioServiceProvider).play('tier_up');
+      _audio.play('tier_up');
     }
 
     final adService = ref.read(adServiceProvider);
@@ -205,7 +238,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
           _ticker.muted = true;
         },
         onAdClosed: () {
-          if (mounted) _ticker.muted = false;
+          if (mounted) {
+            _ticker.muted = false;
+            _lastTime = Duration.zero;
+            _accumulator = 0;
+          }
         },
       );
     }
@@ -255,14 +292,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _engine.configureTutorial(shouldTutor);
 
     _engine.startGame();
+    _lastTime = Duration.zero;
+    _accumulator = 0;
     if (mounted) setState(() {});
   }
 
   void _revive() {
     Navigator.of(context).pop();
     _deathScreenShown = false;
-    ref.read(audioServiceProvider).play('revive');
+    _audio.play('revive');
     _engine.revive();
+    _lastTime = Duration.zero;
+    _accumulator = 0;
     if (mounted) setState(() {});
   }
 
@@ -304,8 +345,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
           behavior: HitTestBehavior.opaque,
           onPointerDown: (_) {
             _engine.isTouching = true;
-            ref.read(audioServiceProvider).play('tap');
-            ref.read(hapticServiceProvider).lightTap();
+            _audio.play('tap');
+            _haptics.lightTap();
           },
           onPointerUp: (_) => _engine.isTouching = false,
           onPointerCancel: (_) => _engine.isTouching = false,
@@ -323,6 +364,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
                         isDarkTheme: isDark,
                         repaint: _repaintNotifier,
                       ),
+                      isComplex: true,
+                      willChange: true,
                       size: Size.infinite,
                     ),
                   ),

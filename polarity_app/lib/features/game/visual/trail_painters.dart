@@ -6,6 +6,12 @@ import '../models/particle.dart';
 class TrailPainters {
   TrailPainters._();
 
+  static final Paint _fillPaint = Paint();
+  static final Paint _fillPaint2 = Paint();
+  static final Paint _strokePaint = Paint();
+  static final Path _pathA = Path();
+  static final Path _pathB = Path();
+
   /// Draw a single trail particle with the given style.
   /// [alpha] = p.life / p.maxLife (1.0 = fresh, fading toward 0 as it dies).
   static void draw(TrailStyle style, Canvas canvas, Particle p, double alpha) {
@@ -48,8 +54,12 @@ class TrailPainters {
   static void _drawDot(Canvas canvas, Particle p, double alpha) {
     final r = p.radius * alpha;
     if (r <= 0) return;
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
-    canvas.drawCircle(Offset(p.x, p.y), r, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(Offset(p.x, p.y), r, _fillPaint);
   }
 
   // ── streaks ────────────────────────────────────────────────────────────────
@@ -63,14 +73,18 @@ class TrailPainters {
 
     final angle = atan2(p.velocityY, p.velocityX);
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
 
     canvas.save();
     canvas.translate(p.x, p.y);
     canvas.rotate(angle);
     canvas.drawOval(
       Rect.fromCenter(center: Offset.zero, width: length * 2, height: width * 2),
-      paint,
+      _fillPaint,
     );
     canvas.restore();
   }
@@ -89,23 +103,32 @@ class TrailPainters {
     final tipLen = r * 2.5;
     final baseLen = r * 1.2;
 
-    final path = Path()
+    final path = _pathA
+      ..reset()
       ..moveTo(p.x + cos(tipAngle) * tipLen, p.y + sin(tipAngle) * tipLen)
       ..lineTo(p.x + cos(baseAngle1) * baseLen, p.y + sin(baseAngle1) * baseLen)
       ..lineTo(p.x + cos(baseAngle2) * baseLen, p.y + sin(baseAngle2) * baseLen)
       ..close();
 
     // Glow layer (no GPU blur — fake glow via larger translucent draw)
-    final paint = Paint()..color = p.color.withValues(alpha: flickerAlpha * 0.25);
+    _fillPaint
+      ..color = p.color.withValues(alpha: flickerAlpha * 0.25)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
     canvas.save();
     canvas.translate(p.x, p.y);
     canvas.scale(1.4);
     canvas.translate(-p.x, -p.y);
-    canvas.drawPath(path, paint);
+    canvas.drawPath(path, _fillPaint);
     canvas.restore();
     // Core
-    paint.color = p.color.withValues(alpha: flickerAlpha);
-    canvas.drawPath(path, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: flickerAlpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawPath(path, _fillPaint);
   }
 
   // ── sparkles ───────────────────────────────────────────────────────────────
@@ -114,30 +137,36 @@ class TrailPainters {
     final r = p.radius * alpha;
     if (r <= 0) return;
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
 
     final longR = r * 2.0;
     final shortR = r * 0.4;
 
     // First diamond (vertical / horizontal)
-    final path = Path()
+    final path = _pathA
+      ..reset()
       ..moveTo(p.x, p.y - longR)
       ..lineTo(p.x + shortR, p.y)
       ..lineTo(p.x, p.y + longR)
       ..lineTo(p.x - shortR, p.y)
       ..close();
-    canvas.drawPath(path, paint);
+    canvas.drawPath(path, _fillPaint);
 
     // Second diamond rotated 45 degrees
     final diag = longR * 0.707; // cos(45) ≈ 0.707
     final diagS = shortR * 0.707;
-    final path2 = Path()
+    final path2 = _pathB
+      ..reset()
       ..moveTo(p.x - diag, p.y - diag)
       ..lineTo(p.x + diagS, p.y - diagS)
       ..lineTo(p.x + diag, p.y + diag)
       ..lineTo(p.x - diagS, p.y + diagS)
       ..close();
-    canvas.drawPath(path2, paint);
+    canvas.drawPath(path2, _fillPaint);
   }
 
   // ── ribbons ────────────────────────────────────────────────────────────────
@@ -154,14 +183,19 @@ class TrailPainters {
     canvas.translate(p.x, p.y);
     canvas.rotate(angle);
 
-    final path = Path()
+    final path = _pathA
+      ..reset()
       ..moveTo(-length, 0)
       ..quadraticBezierTo(0, -midWidth, length, 0)
       ..quadraticBezierTo(0, midWidth, -length, 0)
       ..close();
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha * 0.8);
-    canvas.drawPath(path, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha * 0.8)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawPath(path, _fillPaint);
     canvas.restore();
   }
 
@@ -171,11 +205,12 @@ class TrailPainters {
     final r = p.radius * alpha * 1.5;
     if (r <= 0) return;
 
-    final paint = Paint()
+    _strokePaint
       ..color = p.color.withValues(alpha: alpha * 0.7)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = (r * 0.25).clamp(0.5, 2.0);
-    canvas.drawCircle(Offset(p.x, p.y), r, paint);
+      ..strokeWidth = (r * 0.25).clamp(0.5, 2.0)
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(Offset(p.x, p.y), r, _strokePaint);
   }
 
   // ── embers ─────────────────────────────────────────────────────────────────
@@ -185,11 +220,19 @@ class TrailPainters {
     if (r <= 0) return;
 
     // Inner core
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
-    canvas.drawCircle(Offset(p.x, p.y), r, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(Offset(p.x, p.y), r, _fillPaint);
     // Outer glow
-    final paint2 = Paint()..color = p.color.withValues(alpha: alpha * 0.3);
-    canvas.drawCircle(Offset(p.x, p.y), r * 2.0, paint2);
+    _fillPaint2
+      ..color = p.color.withValues(alpha: alpha * 0.3)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(Offset(p.x, p.y), r * 2.0, _fillPaint2);
   }
 
   // ── crystals ───────────────────────────────────────────────────────────────
@@ -204,7 +247,7 @@ class TrailPainters {
 
     // 4 vertices at uneven angular offsets for a crystalline look.
     const offsets = [0.0, 1.3, 2.9, 4.6];
-    final path = Path();
+    final path = _pathA..reset();
     for (int i = 0; i < offsets.length; i++) {
       final a = rotation + offsets[i];
       final vx = p.x + cos(a) * r;
@@ -217,8 +260,12 @@ class TrailPainters {
     }
     path.close();
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
-    canvas.drawPath(path, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawPath(path, _fillPaint);
   }
 
   // ── lightning ──────────────────────────────────────────────────────────────
@@ -233,7 +280,9 @@ class TrailPainters {
     final segLen = r * 1.5;
 
     // Build a jagged path with 4 points.
-    final path = Path()..moveTo(p.x, p.y);
+    final path = _pathA
+      ..reset()
+      ..moveTo(p.x, p.y);
     double cx = p.x, cy = p.y;
     // Deterministic jags based on life value.
     final jags = [0.6, -0.8, 0.4];
@@ -244,12 +293,12 @@ class TrailPainters {
       path.lineTo(cx + perpX * jag, cy + perpY * jag);
     }
 
-    final paint = Paint()
+    _strokePaint
       ..color = p.color.withValues(alpha: alpha)
       ..style = PaintingStyle.stroke
       ..strokeWidth = (r * 0.4).clamp(0.5, 2.0)
       ..strokeCap = StrokeCap.round;
-    canvas.drawPath(path, paint);
+    canvas.drawPath(path, _strokePaint);
   }
 
   // ── shadows ────────────────────────────────────────────────────────────────
@@ -258,8 +307,12 @@ class TrailPainters {
     final r = p.radius * alpha * 2.0;
     if (r <= 0) return;
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha * 0.3);
-    canvas.drawCircle(Offset(p.x, p.y), r, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha * 0.3)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(Offset(p.x, p.y), r, _fillPaint);
   }
 
   // ── waves ──────────────────────────────────────────────────────────────────
@@ -270,8 +323,12 @@ class TrailPainters {
 
     final waveOffset = sin(p.life * 10 + p.x * 0.05) * r * 3;
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
-    canvas.drawCircle(Offset(p.x + waveOffset, p.y), r, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(Offset(p.x + waveOffset, p.y), r, _fillPaint);
   }
 
   // ── droplets ───────────────────────────────────────────────────────────────
@@ -288,24 +345,33 @@ class TrailPainters {
     canvas.rotate(angle);
 
     // Teardrop: two curves from the tip converging at a circle.
-    final path = Path()
+    final path = _pathA
+      ..reset()
       ..moveTo(tipLen, 0)
       ..quadraticBezierTo(0, -r, -r * 0.3, 0)
       ..quadraticBezierTo(0, r, tipLen, 0)
       ..close();
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
-    canvas.drawPath(path, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawPath(path, _fillPaint);
     canvas.restore();
   }
 
   // ── code ───────────────────────────────────────────────────────────────────
   /// Small filled rectangle (3x6 pixels) — a tiny monospace glyph block.
   static void _drawCode(Canvas canvas, Particle p, double alpha) {
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
     canvas.drawRect(
       Rect.fromCenter(center: Offset(p.x, p.y), width: 3, height: 6),
-      paint,
+      _fillPaint,
     );
   }
 
@@ -326,12 +392,12 @@ class TrailPainters {
       width: r * 4,
       height: r * 2,
     );
-    final paint = Paint()
+    _strokePaint
       ..color = p.color.withValues(alpha: alpha * 0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = (r * 0.35).clamp(0.4, 1.5)
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(arcRect, -pi * 0.3, pi * 0.6, false, paint);
+    canvas.drawArc(arcRect, -pi * 0.3, pi * 0.6, false, _strokePaint);
     canvas.restore();
   }
 
@@ -355,13 +421,18 @@ class TrailPainters {
     final baseX2 = p.x - perpX * halfBase;
     final baseY2 = p.y - perpY * halfBase;
 
-    final path = Path()
+    final path = _pathA
+      ..reset()
       ..moveTo(tipX, tipY)
       ..lineTo(baseX1, baseY1)
       ..lineTo(baseX2, baseY2)
       ..close();
 
-    final paint = Paint()..color = p.color.withValues(alpha: alpha);
-    canvas.drawPath(path, paint);
+    _fillPaint
+      ..color = p.color.withValues(alpha: alpha)
+      ..style = PaintingStyle.fill
+      ..strokeWidth = 0
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawPath(path, _fillPaint);
   }
 }

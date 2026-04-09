@@ -1,5 +1,7 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:polarity/features/game/models/obstacle.dart';
 import 'package:polarity/features/game/models/particle.dart';
 import 'package:polarity/features/game/visual/visual_theme.dart';
 import 'package:polarity/features/game/visual/ball_painters.dart';
@@ -10,6 +12,15 @@ import 'package:polarity/features/game/visual/trail_painters.dart';
 /// the game renderer only needs a single entry-point per visual element.
 class ThemeRenderer {
   ThemeRenderer._();
+
+  static final Paint _fillPaint = Paint();
+  static final Paint _fxPaint = Paint();
+  static final Paint _strokePaint = Paint();
+  static final Paint _linePaint = Paint();
+  static final Path _linePath = Path();
+  static final List<Color> _obstacleGradientColors = [Colors.black, Colors.black];
+  static final List<Color> _wallGradientColorsLeft = [Colors.black, Colors.black];
+  static final List<Color> _wallGradientColorsRight = [Colors.black, Colors.black];
 
   // ── Ball ─────────────────────────────────────────────────────────────────
 
@@ -28,15 +39,12 @@ class ThemeRenderer {
 
     // Draw glow aura.
     final glowR = pr + theme.ballGlowRadius + sin(glowPhase) * 3 * intensity;
-    canvas.drawCircle(
-      Offset.zero,
-      glowR,
-      Paint()
-        ..color = colors.first
-            .withValues(alpha: theme.ballGlowIntensity * intensity)
-        ..maskFilter = MaskFilter.blur(
-            BlurStyle.normal, theme.ballGlowRadius),
-    );
+    _fxPaint
+      ..color = colors.first.withValues(alpha: theme.ballGlowIntensity * intensity)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, theme.ballGlowRadius)
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset.zero, glowR, _fxPaint);
 
     // Draw shape via specialised ball painter.
     BallPainters.draw(theme.ballShape, canvas, pr, colors, glowPhase, intensity);
@@ -88,13 +96,29 @@ class ThemeRenderer {
 
   /// Draw trail particles with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawTrailParticles(Canvas canvas, List<Particle> trailParticles,
-      VisualTheme theme) {
+  static void drawTrailParticles(
+    Canvas canvas,
+    Size size,
+    List<Particle> trailParticles,
+    VisualTheme theme,
+  ) {
+    const margin = 40.0;
+    final minX = -margin;
+    final maxX = size.width + margin;
+    final minY = -margin;
+    final maxY = size.height + margin;
+
     int rendered = 0;
-    for (final p in trailParticles) {
+    for (int i = 0; i < trailParticles.length; i++) {
+      final p = trailParticles[i];
       if (p.isDead) continue;
       if (rendered >= 150) break;
       rendered++;
+
+      if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) {
+        continue;
+      }
+
       final alpha = (p.life / p.maxLife).clamp(0.0, 1.0);
       TrailPainters.draw(theme.trailStyle, canvas, p, alpha);
     }
@@ -104,14 +128,30 @@ class ThemeRenderer {
 
   /// Draw death explosion particles with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawDeathParticles(Canvas canvas, List<Particle> particles,
-      VisualTheme theme) {
+  static void drawDeathParticles(
+    Canvas canvas,
+    Size size,
+    List<Particle> particles,
+    VisualTheme theme,
+  ) {
+    const margin = 56.0;
+    final minX = -margin;
+    final maxX = size.width + margin;
+    final minY = -margin;
+    final maxY = size.height + margin;
+
     // Cap rendered particles for performance
     int rendered = 0;
-    for (final p in particles) {
+    for (int i = 0; i < particles.length; i++) {
+      final p = particles[i];
       if (p.isDead) continue;
       if (rendered >= 60) break;
       rendered++;
+
+      if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) {
+        continue;
+      }
+
       final alpha = (p.life / p.maxLife).clamp(0.0, 1.0);
       TrailPainters.draw(theme.trailStyle, canvas, p, alpha);
     }
@@ -121,7 +161,7 @@ class ThemeRenderer {
 
   /// Draw obstacles with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawObstacles(Canvas canvas, Size size, List<dynamic> obstacles,
+  static void drawObstacles(Canvas canvas, Size size, List<Obstacle> obstacles,
       VisualTheme theme, Color fgColor, double gameTime) {
     final colors = theme.obstacleColors;
     final primary =
@@ -129,16 +169,19 @@ class ThemeRenderer {
     final secondary =
         colors.length > 1 ? colors[1] : primary.withValues(alpha: 0.6);
 
-    // Ensure obstacles are visible on dark backgrounds
-    Color effectivePrimary = primary;
-    Color effectiveSecondary = secondary;
-    if (primary.computeLuminance() < 0.05 && secondary.computeLuminance() < 0.05) {
-      // Both colors nearly invisible — boost to minimum visibility
-      effectivePrimary = Color.lerp(primary, const Color(0xFF404040), 0.6)!;
-      effectiveSecondary = Color.lerp(secondary, const Color(0xFF303030), 0.6)!;
-    }
+    // Preserve theme identity but keep obstacle colors readable against current bg.
+    final effectivePrimary = _boostObstacleContrast(primary, fgColor);
+    final effectiveSecondary = _boostObstacleContrast(secondary, fgColor);
+    _obstacleGradientColors[0] = effectivePrimary;
+    _obstacleGradientColors[1] = effectiveSecondary;
 
-    for (final obs in obstacles) {
+    final sinTime3 = sin(gameTime * 3.0);
+    final glowRadiusScale = 0.5 + sinTime3.abs() * 0.15;
+    final tipBlur = MaskFilter.blur(BlurStyle.normal, 6 + sinTime3 * 6);
+    final pulseScale = 1.0 + sin(gameTime * 5.0) * 0.3;
+
+    for (int i = 0; i < obstacles.length; i++) {
+      final obs = obstacles[i];
       final double worldY = obs.worldY;
       if (worldY < -50 || worldY > size.height + 50) continue;
 
@@ -167,67 +210,109 @@ class ThemeRenderer {
       final gradEnd =
           fromLeft ? Offset(0, worldY) : Offset(size.width, worldY);
 
-      final gradient = LinearGradient(colors: [effectivePrimary, effectiveSecondary]);
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..shader = gradient.createShader(Rect.fromPoints(gradStart, gradEnd)),
-      );
+      _fillPaint
+        ..color = const Color(0xFFFFFFFF)
+        ..shader = ui.Gradient.linear(gradStart, gradEnd, _obstacleGradientColors)
+        ..blendMode = BlendMode.srcOver
+        ..style = PaintingStyle.fill
+        ..maskFilter = null;
+      canvas.drawRRect(rrect, _fillPaint);
 
       // Tip glow based on obstacle style.
       _drawObstacleTip(canvas, theme.obstacleStyle, tipX, worldY,
-          halfT, primary, theme.obstacleGlowIntensity, gameTime);
+          halfT, effectivePrimary, theme.obstacleGlowIntensity, gameTime,
+          glowRadiusScale: glowRadiusScale,
+          pulseScale: pulseScale,
+          tipBlur: tipBlur);
     }
+  }
+
+  static Color _boostObstacleContrast(Color color, Color fgColor) {
+    final channelDistance =
+        ((color.r - fgColor.r).abs() +
+                (color.g - fgColor.g).abs() +
+                (color.b - fgColor.b).abs()) /
+            3.0;
+
+    // If color drifts too close to background (far from fg), nudge it toward fg.
+    if (channelDistance <= 0.62) {
+      return color;
+    }
+
+    final t = ((channelDistance - 0.62) / 0.38).clamp(0.0, 1.0) * 0.45;
+    return Color.lerp(color, fgColor, t) ?? color;
   }
 
   static void _drawObstacleTip(Canvas canvas, ObstacleStyle style,
       double tipX, double tipY, double halfT, Color color, double intensity,
-      double gameTime) {
+      double gameTime, {
+      required double glowRadiusScale,
+      required double pulseScale,
+      required MaskFilter tipBlur,
+  }) {
     final glowAlpha =
         (0.15 + sin(gameTime * 4 + tipY * 0.02).abs() * 0.3) * intensity;
     final effectiveGlowAlpha = glowAlpha.clamp(0.04, 1.0);
-    final glowR = halfT * (0.5 + sin(gameTime * 3).abs() * 0.15);
-    final blurSigma = 6 + sin(gameTime * 3) * 6;
-
-    // Helper: GPU-blurred glow at obstacle tip
-    void tipGlow(double cx, double cy, double r, double a) {
-      canvas.drawCircle(
-        Offset(cx, cy),
-        r,
-        Paint()
-          ..color = color.withValues(alpha: a)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, blurSigma),
-      );
-    }
+    final glowR = halfT * glowRadiusScale;
 
     switch (style) {
       case ObstacleStyle.solid:
       case ObstacleStyle.glow:
-        tipGlow(tipX, tipY, glowR, effectiveGlowAlpha);
+        _drawTipGlow(canvas, tipX, tipY, glowR, color, effectiveGlowAlpha,
+            tipBlur);
       case ObstacleStyle.pulse:
-        final pulseScale = 1.0 + sin(gameTime * 5) * 0.3;
-        tipGlow(tipX, tipY, glowR * pulseScale, effectiveGlowAlpha * 0.8);
+        _drawTipGlow(canvas, tipX, tipY, glowR * pulseScale, color,
+            effectiveGlowAlpha * 0.8, tipBlur);
       case ObstacleStyle.flame:
         for (int i = 0; i < 3; i++) {
           final offset = sin(gameTime * 8 + i * 1.5) * 3;
           final h = halfT * (1.0 + sin(gameTime * 6 + i) * 0.3);
-          tipGlow(tipX + offset, tipY - h * 0.5 * i, 3.0,
-              effectiveGlowAlpha * (1.0 - i * 0.3));
+          _drawTipGlow(
+            canvas,
+            tipX + offset,
+            tipY - h * 0.5 * i,
+            3.0,
+            color,
+            effectiveGlowAlpha * (1.0 - i * 0.3),
+            tipBlur,
+          );
         }
       case ObstacleStyle.frost:
-        tipGlow(tipX, tipY, glowR * 0.8, effectiveGlowAlpha);
+        _drawTipGlow(
+            canvas, tipX, tipY, glowR * 0.8, color, effectiveGlowAlpha, tipBlur);
       case ObstacleStyle.electric:
         final sparkAlpha = (sin(gameTime * 12 + tipY) > 0.5)
             ? effectiveGlowAlpha * 1.5
             : effectiveGlowAlpha * 0.3;
-        tipGlow(tipX, tipY, glowR * 0.6, sparkAlpha.clamp(0.0, 1.0));
+        _drawTipGlow(canvas, tipX, tipY, glowR * 0.6, color,
+            sparkAlpha.clamp(0.0, 1.0), tipBlur);
       case ObstacleStyle.stripe:
-        tipGlow(tipX, tipY, glowR, effectiveGlowAlpha * 0.6);
+        _drawTipGlow(
+            canvas, tipX, tipY, glowR, color, effectiveGlowAlpha * 0.6, tipBlur);
       case ObstacleStyle.cracked:
-        tipGlow(tipX, tipY, glowR * 1.2, effectiveGlowAlpha * 0.5);
+        _drawTipGlow(canvas, tipX, tipY, glowR * 1.2, color,
+            effectiveGlowAlpha * 0.5, tipBlur);
       case ObstacleStyle.shadow:
-        tipGlow(tipX, tipY, glowR * 1.5, effectiveGlowAlpha * 0.4);
+        _drawTipGlow(canvas, tipX, tipY, glowR * 1.5, color,
+            effectiveGlowAlpha * 0.4, tipBlur);
     }
+  }
+
+  static void _drawTipGlow(
+    Canvas canvas,
+    double cx,
+    double cy,
+    double r,
+    Color color,
+    double alpha,
+    MaskFilter tipBlur,
+  ) {
+    _fxPaint
+      ..color = color.withValues(alpha: alpha)
+      ..maskFilter = tipBlur
+      ..style = PaintingStyle.fill
+      ..shader = null;
+    canvas.drawCircle(Offset(cx, cy), r, _fxPaint);
   }
 
   // ── Magnet effect ────────────────────────────────────────────────────────
@@ -247,17 +332,20 @@ class ThemeRenderer {
       final midX = (wallX + playerX) / 2;
       final midY = playerY + yOffset;
 
-      final path = Path()
+      _linePath
+        ..reset()
         ..moveTo(wallX, playerY + (i - 1) * 20)
         ..quadraticBezierTo(midX, midY, playerX, playerY);
 
       canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withValues(
-              alpha: 0.06 + sin(gameTime * 4 + i).abs() * 0.06)
+        _linePath,
+        _linePaint
+          ..color =
+              color.withValues(alpha: 0.06 + sin(gameTime * 4 + i).abs() * 0.06)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0,
+          ..strokeWidth = 1.0
+          ..maskFilter = null
+          ..shader = null,
       );
     }
   }
@@ -272,14 +360,16 @@ class ThemeRenderer {
         ? theme.ambientColors.first
         : theme.ballColors.first;
 
-    for (final p in ambientParticles) {
+    for (int i = 0; i < ambientParticles.length; i++) {
+      final p = ambientParticles[i];
       if (p.isDead) continue;
       final alpha = (p.life / p.maxLife).clamp(0.0, 1.0) * 0.08;
-      canvas.drawCircle(
-        Offset(p.x, p.y),
-        p.radius,
-        Paint()..color = color.withValues(alpha: alpha),
-      );
+      _fillPaint
+        ..color = color.withValues(alpha: alpha)
+        ..style = PaintingStyle.fill
+        ..maskFilter = null
+        ..shader = null;
+      canvas.drawCircle(Offset(p.x, p.y), p.radius, _fillPaint);
     }
   }
 
@@ -328,20 +418,36 @@ class ThemeRenderer {
       Canvas canvas, Size size, Color color, double alpha) {
     final a = (alpha * 0.7).clamp(0.0, 1.0);
     // Gradient strips along left and right edges
-    final leftGradient = LinearGradient(
-      colors: [color.withValues(alpha: a), color.withValues(alpha: 0.0)],
-    );
-    final rightGradient = LinearGradient(
-      colors: [color.withValues(alpha: 0.0), color.withValues(alpha: a)],
-    );
     final leftRect = Rect.fromLTWH(0, 0, 20, size.height);
     final rightRect = Rect.fromLTWH(size.width - 20, 0, 20, size.height);
-    canvas.drawRect(leftRect,
-      Paint()..shader = leftGradient.createShader(leftRect),
-    );
-    canvas.drawRect(rightRect,
-      Paint()..shader = rightGradient.createShader(rightRect),
-    );
+    _wallGradientColorsLeft[0] = color.withValues(alpha: a);
+    _wallGradientColorsLeft[1] = color.withValues(alpha: 0.0);
+    _wallGradientColorsRight[0] = color.withValues(alpha: 0.0);
+    _wallGradientColorsRight[1] = color.withValues(alpha: a);
+
+    _fillPaint
+      ..color = const Color(0xFFFFFFFF)
+      ..shader = ui.Gradient.linear(
+        leftRect.topLeft,
+        leftRect.topRight,
+        _wallGradientColorsLeft,
+      )
+      ..blendMode = BlendMode.srcOver
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
+    canvas.drawRect(leftRect, _fillPaint);
+
+    _fxPaint
+      ..color = const Color(0xFFFFFFFF)
+      ..shader = ui.Gradient.linear(
+        rightRect.topLeft,
+        rightRect.topRight,
+        _wallGradientColorsRight,
+      )
+      ..blendMode = BlendMode.srcOver
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
+    canvas.drawRect(rightRect, _fxPaint);
   }
 
   // ── Theme transition VFX ─────────────────────────────────────────────────
@@ -356,20 +462,20 @@ class ThemeRenderer {
     final color = theme.ballColors.first;
 
     // Expanding ring.
-    canvas.drawCircle(
-      Offset(playerX, playerY),
-      radius,
-      Paint()
-        ..color = color.withValues(alpha: alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6.0 - progress * 5.0
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-    );
+    _strokePaint
+      ..color = color.withValues(alpha: alpha)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6.0 - progress * 5.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+      ..shader = null;
+    canvas.drawCircle(Offset(playerX, playerY), radius, _strokePaint);
 
     // Screen wash.
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = color.withValues(alpha: (1.0 - progress) * 0.1),
-    );
+    _fillPaint
+      ..color = color.withValues(alpha: (1.0 - progress) * 0.1)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null
+      ..shader = null;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _fillPaint);
   }
 }
