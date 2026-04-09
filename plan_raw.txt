@@ -1,0 +1,1237 @@
+I have now read every file in the project and have a complete understanding of the architecture. Here is the comprehensive V3 implementation plan.
+
+---
+
+# Polarity V3 Implementation Plan
+
+## Part 1: Bug Fixes (9 bugs)
+
+All bugs should be fixed BEFORE starting the theme system, since some affect the same state management code that the theme system will extend.
+
+### Bug 1: Stale isNearHighScore/isInRecordTerritory after revive
+
+**Root cause**: In `revive()` (game_engine.dart line 231-234), `isNearHighScore` and `isInRecordTerritory` are reset to false. However, `highScore` was already updated in `_die()` (line 642-644) to match or exceed the current score. After revive, the player's score is unchanged, and the very first obstacle scored calls `_updateNearHighScore()` (line 1020), which immediately recalculates `isNearHighScore = score >= highScore - 5`. Since `score == highScore` after the first death updated it, the tension indicators fire instantly with no dramatic buildup.
+
+**Fix**: In `revive()`, set a `_scoreAtRevive` field to the current score. In `_updateNearHighScore()`, only activate the near-high-score system when `score > _scoreAtRevive`. This means the player must actually surpass their pre-revive score before tension effects kick in.
+
+```
+// In revive():
+_scoreAtRevive = score;
+
+// In _updateNearHighScore():
+if (highScore <= 10 || score <= _scoreAtRevive) {
+  isNearHighScore = false;
+  isInRecordTerritory = false;
+  return;
+}
+```
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+### Bug 2: Cross-mode tier inflation
+
+**Root cause**: In `_die()` (game_engine.dart lines 657-664), `GameConstants.getTier(highScore, easyMode: easyMode)` uses the CURRENT mode's thresholds, but `highScore` might have been set in a different mode. Easy mode thresholds are much higher (80/160/320/560/800 vs 50/100/200/350/500), so a score of 350 set in easy mode evaluated against hard thresholds would grant Diamond tier (350 >= 350) instead of Silver (350 >= 320 in easy).
+
+**Fix**: Store the mode in which the high score was achieved. Two approaches:
+
+Option A (Minimal, recommended): Add a `_highScoreMode` field to the engine and persist it in storage. In `_die()`, when setting a new high score, also record the mode. For tier calculation, always use the mode that corresponds to the high score:
+
+```
+// In _die(), when highScore is updated:
+if (score > highScore) {
+  highScore = score;
+  _highScoreMode = easyMode;
+}
+// For tier:
+final newTier = GameConstants.getTier(highScore, easyMode: _highScoreMode);
+```
+
+Option B (Complete, but bigger change): Store separate high scores per mode. This is cleaner but requires more storage and UI changes. Recommend Option A for V3.
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`, `d:\Polarity\polarity_app\lib\services\storage_service.dart`
+
+### Bug 3: tierJustUnlocked fires twice on revive
+
+**Root cause**: When the player dies the first time with a score that unlocks a new tier, `tierJustUnlocked = true` is set in `_die()` (line 662). The death screen shows the tier badge, and `_onDeath()` in game_screen.dart persists the tier and plays the tier_up sound (lines 157-162). Then `revive()` resets `tierJustUnlocked = false` (line 234). But when the player dies again, `_die()` runs again with `score == highScore` (line 657 condition is true), recalculates `newTier = getTier(highScore)`, and since `currentTier` was already updated in the first death, `newTier == currentTier`, so `tierJustUnlocked` should NOT fire again... UNLESS the bug is actually that `revive()` does NOT reset `previousTier` to match `currentTier`, so the death screen shows stale data.
+
+Deeper analysis: The more likely path is that `_onDeath()` in game_screen.dart checks `_engine.tierJustUnlocked` (line 157) and persists it. Then revive sets it false. Then second death: `_die()` checks `score == highScore` which is true (score hasn't changed), recalculates tier, `newTier == currentTier`, condition `newTier > currentTier` is false, so `tierJustUnlocked` stays false. The second death screen would show `tierJustUnlocked = false`. This seems correct.
+
+However, the edge case: If the player scores PAST another tier threshold after revive, then `newTier > currentTier` would be true, and `tierJustUnlocked` fires again legitimately. But `_onDeath()` also fires `tier_up` audio and persists again.
+
+The actual bug is likely that `_onDeath()` is called, which persists `tierJustUnlocked` state, but the death screen is shown 800ms later asynchronously (line 178). If the player is fast enough to trigger revive before the death screen fully appears (edge case in rapid tap flow), `tierJustUnlocked` could be consumed inconsistently.
+
+**Fix**: Add a definitive consumption pattern. In `_onDeath()`, immediately capture and clear `tierJustUnlocked`:
+
+```
+// In _onDeath():
+final tierUp = _engine.tierJustUnlocked;
+_engine.tierJustUnlocked = false; // consume immediately
+if (tierUp) {
+  storage.setMilestoneTier(_engine.currentTier);
+  ...
+}
+```
+
+Pass `tierUp` as a captured value to the death screen instead of reading it from the engine 800ms later. Also reset `tierJustUnlocked = false` in `revive()` (already done, but ensure the consumption pattern is consistent).
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\screens\game_screen.dart`, `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+### Bug 4: isNewHighScore fires true after revive with no score improvement
+
+**Root cause**: In `_die()` (line 642), when `score > highScore`, `_newHighScoreThisRun = true` is set and never cleared. In `revive()` (lines 219-242), `_newHighScoreThisRun` is NOT reset. So after revive, when the player dies again, even with the same score, `isNewHighScore` (line 1034: `bool get isNewHighScore => _newHighScoreThisRun`) returns true. This causes `_onDeath()` in game_screen.dart to re-persist the high score and the death screen to show "NEW BEST" again.
+
+**Fix**: Either (a) reset `_newHighScoreThisRun = false` in `revive()`, or (b) use a more nuanced approach: track the high score BEFORE the run started and only show "NEW BEST" if the final score exceeds it. Approach (a) is simpler and correct:
+
+```
+// In revive():
+_newHighScoreThisRun = false;
+```
+
+Then if the player scores past the high score AGAIN after revive, `_die()` would naturally re-set `_newHighScoreThisRun = true` because the condition `score > highScore` would be true (highScore was set to the previous death's score, so they need to exceed it).
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+### Bug 5: isTouching not reset in startGame()
+
+**Root cause**: Actually, `isTouching = false` IS set in `startGame()` at line 164. But the real issue is that `isTouching` is driven by the `Listener` widget in game_screen.dart (lines 270-275): `onPointerDown` sets `isTouching = true`, `onPointerUp/Cancel` sets it false. If the player's finger is ON the screen when they tap "RESTART" on the death screen, the death screen pops, the Listener in the game screen receives the pointer-down event, and `isTouching` gets set back to true immediately after `startGame()` clears it.
+
+Additionally, `isTouching` is NOT reset in `revive()` (lines 219-242). If the player was touching when they died, `isTouching` remains true during countdown, and on resume the ball immediately pulls right.
+
+**Fix**: Reset `isTouching = false` in `revive()`. For the `startGame()` race condition with the Listener, add a brief input lockout: set a `_inputLockoutTimer` in `startGame()` that ignores touch input for the first ~100ms, or reset `isTouching = false` at the start of the first `_updatePlaying()` call after `startGame()`.
+
+```
+// In revive():
+isTouching = false;
+
+// In startGame():
+isTouching = false; // already there
+_inputLockoutFrames = 3; // ignore first 3 frames of input
+```
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+### Bug 6: Particle cleanup during state transitions
+
+**Root cause**: When transitioning between states, particles from different systems can linger. Specifically:
+- `trailParticles` and `magnetParticles` continue updating in `_updateDead()` and `_updateCountdown()`, which is correct for visual fadeout
+- But `particles` (death explosion) are not cleared when transitioning from dead to countdown (revive). `revive()` at line 225 does clear `particles`, so this is correct
+- The issue is likely that `ambientParticles` accumulate color references from the old accent color when a new game starts. `_initAmbientParticles()` is called in `startGame()` which clears them
+- More subtle: `_spawnOneAmbientParticle()` uses `accentColor` (line 516), but during state transitions, `accentColor` might be mid-lerp to a new value, creating visually jarring particles
+
+**Fix**: In `startGame()`, ensure all particle lists are cleared (already done). In `revive()`, ensure ambient particles are refreshed with current accent colors. Add a `_refreshAmbientColors()` method that updates the color of existing ambient particles to match the current accent.
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+### Bug 7: DST streak calculation edge case
+
+**Root cause**: Looking at `updateStreak()` in storage_service.dart (lines 85-110), the code constructs `yesterdayDate = DateTime(today.year, today.month, today.day - 1)` which correctly handles calendar day arithmetic. However, there is a remaining edge case: `DateTime.now()` returns local time. During a DST "fall back" transition, the local clock repeats an hour. If a player plays at 1:30 AM the first time (before fall back), the date is recorded as today's date. Then DST kicks in, clock goes back to 1:00 AM. The player plays again. `DateTime.now()` returns the same calendar day, `todayStr == lastDate`, so streak is preserved correctly.
+
+The actual remaining bug is likely: the `DateTime(today.year, today.month, today.day - 1)` constructor creates a midnight DateTime. If `today` is January 1 and the local timezone has a DST transition near midnight on December 31, the constructed DateTime might normalize to an unexpected date in rare timezone configurations. However, Dart's `DateTime` constructor handles `day: 0` by going to the last day of the previous month, so `DateTime(2024, 1, 0)` correctly becomes December 31, 2023.
+
+A more practical edge case: If the device timezone changes (e.g., travel), the date string comparison could break. A player could play at 11 PM in timezone A (Jan 5), travel to timezone B where it's still Jan 4, play again. `todayStr` is "2024-01-04" but `lastPlayDate` is "2024-01-05". This is > yesterday, and != today, so streak resets to 1. This is arguably incorrect.
+
+**Fix**: Use UTC for all date comparisons to eliminate timezone/DST ambiguity:
+
+```
+final today = DateTime.now().toUtc();
+```
+
+Or accept the current behavior and document it. Since this is a minor edge case, the simpler fix is to use `DateTime.now()` but compare using `difference.inDays` after normalizing both to noon:
+
+```
+final todayNoon = DateTime(today.year, today.month, today.day, 12);
+final lastNoon = DateTime(lastYear, lastMonth, lastDay, 12);
+final diff = todayNoon.difference(lastNoon).inDays;
+```
+
+**Files**: `d:\Polarity\polarity_app\lib\services\storage_service.dart`
+
+### Bug 8: shieldJustBroke/shieldJustPickedUp not cleared after consumption
+
+**Root cause**: These flags ARE cleared in game_screen.dart's `_onTick()` (lines 96-105) and in `startGame()` (lines 189-190). But they are NOT cleared in `revive()` (lines 219-242). If the shield breaks on the frame the player dies (shield absorbs hit, then another obstacle kills on the same frame -- actually this cannot happen since `_handleHit()` returns after shield absorption). More likely: `shieldJustPickedUp` is set at score X, but the player dies before the next tick consumes it. Then `revive()` is called, but `shieldJustPickedUp` remains true. The next tick after revive plays `shield_pickup` sound spuriously.
+
+**Fix**: Add `shieldJustBroke = false` and `shieldJustPickedUp = false` to `revive()`.
+
+```
+// In revive():
+shieldJustBroke = false;
+shieldJustPickedUp = false;
+```
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+### Bug 9: Player position not re-centered on revive
+
+**Root cause**: `revive()` (lines 219-242) resets player alive state and velocity but does NOT reset `player.x`. The player stays at whatever x position they died at, which could be right against a wall. Combined with obstacles still scrolling during countdown, the player might be in an impossible position when gameplay resumes.
+
+**Fix**: Re-center the player in `revive()`:
+
+```
+// In revive():
+player.x = screenWidth / 2;
+player.y = screenHeight * playerYFraction;
+player.velocityX = 0;
+```
+
+Also clear nearby obstacles that would immediately collide:
+
+```
+// Remove obstacles within a dangerous zone around the player
+obstacles.removeWhere((obs) {
+  final dist = (obs.worldY - player.y).abs();
+  return dist < obstacleSpacing * 0.5;
+});
+```
+
+**Files**: `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart`
+
+---
+
+## Part 2: VisualTheme Data Architecture
+
+### New Directory Structure
+
+```
+lib/features/game/visual/
+    visual_theme.dart          -- Data class + all enums
+    theme_registry.dart        -- 50 theme definitions + DFA + selection logic
+    ball_painters.dart         -- ~16 ball shape draw functions
+    trail_painters.dart        -- ~15 trail style + ~10 behavior draw functions
+    explosion_painters.dart    -- ~10 explosion pattern draw functions
+    theme_renderer.dart        -- Master dispatch: reads VisualTheme, delegates to shape/trail/explosion painters
+```
+
+### 2A: visual_theme.dart -- Enums and Data Class
+
+This file defines all enums and the immutable VisualTheme data class. Approximately 250-300 lines.
+
+**Enums:**
+
+```dart
+enum BallShape {
+  circle,      // Standard sphere with radial gradient
+  hexagon,     // Regular hexagon, flat-top
+  star5,       // 5-pointed star
+  star6,       // 6-pointed star (Star of David)
+  pentagon,    // Regular pentagon
+  diamond,     // Diamond/rhombus (existing phase 3)
+  gear,        // Gear/cog with teeth
+  crescent,    // Crescent moon shape
+  crown,       // Crown with 3 points
+  cross,       // Plus/cross shape
+  cube,        // Isometric cube projection
+  spiral,      // Fibonacci spiral shape
+  eye,         // Eye/vesica piscis shape
+  snowflake,   // 6-arm snowflake
+  bolt,        // Lightning bolt
+  prism,       // Triangular prism (2D projection)
+  leaf,        // Pointed leaf shape
+  ring,        // Hollow ring (existing phase 2)
+  slit,        // Horizontal slit (existing phase 4)
+  singularity, // Black hole (existing phase 5)
+  doubleRing,  // Two concentric rings
+  helix,       // Double helix projection
+  tesseract,   // 4D hypercube projection
+}
+
+enum BallEffect {
+  none,        // Static
+  pulse,       // Scale oscillation
+  spin,        // Rotation
+  flicker,     // Alpha oscillation
+  breathe,     // Slow scale+alpha
+  prismatic,   // Hue cycling
+  orbit,       // Orbiting satellite dots
+  phase,       // Blink in/out
+  morph,       // Slight shape distortion
+  shatter,     // Cracked lines appear
+  corona,      // Radiating spikes
+  ripple,      // Concentric ring emission
+}
+
+enum TrailStyle {
+  dots,        // Round particles (default)
+  streaks,     // Elongated particles
+  flames,      // Upward-flickering flame shapes
+  sparkles,    // Twinkling star-shaped particles
+  ribbons,     // Connected wavy line
+  bubbles,     // Hollow circle particles that float
+  embers,      // Gravity-affected orange particles
+  crystals,    // Angular shard particles
+  lightning,   // Branching electric lines
+  shadows,     // Dark translucent particles
+  waves,       // Sine-wave path particles
+  droplets,    // Teardrop-shaped particles
+  code,        // Small rectangles (digital rain vibe)
+  feathers,    // Slow-falling curved particles
+  shards,      // Sharp angular fragments
+}
+
+enum ExplosionPattern {
+  burst,       // Radial random blast (default)
+  spiral,      // Golden-ratio spiral (existing elite)
+  ring,        // Expanding concentric rings
+  fountain,    // Upward fountain with gravity
+  vortex,      // Spinning inward collapse
+  shatter,     // Angular shard explosion
+  bloom,       // Flower-petal unfurling pattern
+  lightning,   // Branching tree of particles
+  cascade,     // Waterfall downward
+  implosion,   // Particles converge then burst
+  nova,        // Two-phase: compress then expand
+  fractal,     // Self-similar branching pattern
+}
+
+enum MagnetStyle {
+  lines,       // Bezier curves (default)
+  particles,   // Flowing dot stream
+  waves,       // Sine-modulated lines
+  arcs,        // Arc-shaped connections
+  tendrils,    // Organic curving tendrils
+  chains,      // Dotted chain links
+  pulses,      // Expanding pulse rings from wall
+  electric,    // Jagged lightning paths
+}
+
+enum ObstacleStyle {
+  solid,       // Solid fill with gradient (default)
+  glow,        // Stronger tip glow
+  pulse,       // Thickness oscillation
+  stripe,      // Horizontal stripes within obstacle
+  cracked,     // Crack lines across surface
+  flame,       // Flame tips
+  frost,       // Crystalline/icy tips
+  electric,    // Sparking tips
+  shadow,      // Shadow/dark gradient with aura
+}
+
+enum AmbientStyle {
+  dust,        // Default floating dust
+  sparkle,     // Twinkling stars
+  rain,        // Downward streaks
+  snow,        // Slow-falling dots
+  embers,      // Upward-floating hot particles
+  bubbles,     // Rising circles
+  stars,       // Larger star shapes
+  leaves,      // Drifting leaf shapes
+  fireflies,   // Blinking dots
+  ash,         // Gray slow-falling particles
+}
+
+enum WallStyle {
+  clean,       // Default (invisible walls)
+  glow,        // Subtle edge glow
+  pulse,       // Pulsing edge glow
+  drip,        // Dripping effect from walls
+  crack,       // Crack lines extending from walls
+  electric,    // Sparking wall edges
+  frost,       // Icy crystalline wall edges
+  flame,       // Flame licking from wall edges
+}
+```
+
+**VisualTheme data class:**
+
+```dart
+class VisualTheme {
+  final String id;            // e.g., "t1_neon_pulse"
+  final String displayName;   // e.g., "Neon Pulse"
+  final int tier;             // 1-5
+  final int variation;        // 0-9 within tier
+
+  // Ball
+  final BallShape ballShape;
+  final List<Color> ballColors;
+  final double ballGlowRadius;       // 0-20, default ~8
+  final double ballGlowIntensity;    // 0-1, default ~0.25
+  final BallEffect ballEffect;
+  final double ballEffectSpeed;       // multiplier, default 1.0
+
+  // Trail
+  final TrailStyle trailStyle;
+  final List<Color> trailColors;
+  final double trailWidth;            // particle radius scale, default 1.0
+  final double trailLife;             // lifetime scale, default 1.0
+  final int trailDensity;            // spawn rate multiplier (1-3)
+
+  // Obstacle
+  final ObstacleStyle obstacleStyle;
+  final List<Color> obstacleColors;
+  final double obstacleGlowIntensity; // 0-1, default ~0.25
+
+  // Death explosion
+  final ExplosionPattern explosionPattern;
+  final List<Color> explosionColors;
+  final int explosionParticleCount;   // 80-200
+  final double explosionLife;          // 0.5-2.0
+  final double explosionGravity;       // 0-120
+
+  // Magnet/pull
+  final MagnetStyle magnetStyle;
+  final List<Color> magnetColors;
+
+  // Ambient particles
+  final AmbientStyle ambientStyle;
+  final List<Color> ambientColors;
+  final int ambientCount;             // 15-40
+
+  // Wall accent
+  final WallStyle wallStyle;
+  final Color wallAccentColor;
+  final double wallGlowIntensity;     // 0-1
+
+  // Phase 5 inversion overrides (null = auto-invert)
+  final List<Color>? invertedBallColors;
+  final List<Color>? invertedTrailColors;
+  final List<Color>? invertedObstacleColors;
+
+  const VisualTheme({ ... });
+
+  /// Auto-invert colors for Phase 5 white background
+  VisualTheme withInversion() {
+    if (invertedBallColors != null) return this; // already has overrides
+    return VisualTheme(
+      // ... copy all fields, but invert any too-bright colors
+      ballColors: ballColors.map(_ensureContrastOnWhite).toList(),
+      trailColors: trailColors.map(_ensureContrastOnWhite).toList(),
+      // etc.
+    );
+  }
+
+  static Color _ensureContrastOnWhite(Color c) {
+    final luminance = c.computeLuminance();
+    if (luminance > 0.7) {
+      // Too bright for white background, darken
+      return HSLColor.fromColor(c).withLightness(0.3).toColor();
+    }
+    return c;
+  }
+}
+```
+
+### 2B: theme_registry.dart -- All 50 Theme Definitions
+
+This file contains the 50 `const VisualTheme` instances organized by tier. Approximately 1200-1500 lines (each theme ~25-30 lines of field assignments).
+
+**Tier 1 (Score 100): "Awakening" -- 10 themes**
+
+| # | Name | Ball | Colors | Trail | Explosion | Key Visual Identity |
+|---|------|------|--------|-------|-----------|-------------------|
+| 1 | Neon Pulse | circle | cyan, white | streaks | ring | Tron-like neon edges, clean cyan glow |
+| 2 | Crimson Flow | hexagon | dark red, crimson | flames | burst | Brutal red hexagonal geometry, fire trails |
+| 3 | Forest Spirit | leaf | emerald, lime | sparkles | bloom | Natural greens, organic leaf shape, blooming death |
+| 4 | Ocean Deep | circle | navy, teal, aqua | bubbles | cascade | Underwater feel, rising bubbles, waterfall death |
+| 5 | Sunset Blaze | star5 | orange, hot pink, gold | embers | fountain | Warm sunset palette, ember trail, fountain death |
+| 6 | Violet Storm | pentagon | deep purple, violet | lightning | lightning | Electric purple, angular shape, branching death |
+| 7 | Golden Hour | crown | warm gold, amber | dots | spiral | Regal gold tones, crown ball, spiral death |
+| 8 | Arctic Frost | snowflake | ice blue, white, silver | crystals | shatter | Frozen palette, crystalline everything |
+| 9 | Copper Forge | gear | copper, bronze, orange | embers | burst | Industrial copper, mechanical gear ball |
+| 10 | Rose Quartz | diamond | pink, rose, light pink | sparkles | bloom | Soft pink gemstone aesthetic |
+
+**Tier 2 (Score 200): "Ascension" -- 10 themes**
+
+| # | Name | Ball | Colors | Trail | Explosion | Key Visual Identity |
+|---|------|------|--------|-------|-----------|-------------------|
+| 11 | Plasma Core | circle+orbit | hot pink, electric blue | streaks | nova | Dual-tone plasma, satellite dots orbit ball |
+| 12 | Void Walker | eye | deep purple, black | shadows | vortex | Dark ethereal eye, shadow tendrils, collapsing death |
+| 13 | Solar Flare | circle+corona | yellow-white, orange | flames | burst | Sun-like corona spikes radiating from ball |
+| 14 | Toxic Spill | hexagon | neon green, dark purple | droplets | cascade | Biohazard aesthetic, acid drip trails |
+| 15 | Chrome Machine | cube | silver, light gray | streaks | shatter | Metallic isometric cube, chrome sparks |
+| 16 | Blood Moon | crescent | dark red, gray, crimson | shadows | ring | Dark atmospheric crescent, mist-like shadows |
+| 17 | Digital Rain | cross | matrix green, dark green | code | fractal | Matrix-inspired, rectangular code particles |
+| 18 | Sapphire Crown | crown | royal blue, gold | sparkles | spiral | Blue royalty, gold accents, jewel sparkles |
+| 19 | Phantom Flame | circle | ghost white, pale blue | flames | implosion | Ethereal ghostly white flames, imploding death |
+| 20 | Thunder God | bolt | electric yellow, white | lightning | lightning | Jagged bolt shape, chain lightning everywhere |
+
+**Tier 3 (Score 300): "Mastery" -- 10 themes**
+
+| # | Name | Ball | Colors | Trail | Explosion | Key Visual Identity |
+|---|------|------|--------|-------|-----------|-------------------|
+| 21 | Nebula Drift | spiral | pastel pink, blue, purple | sparkles | bloom | Multi-color space dust, spiral galaxy ball |
+| 22 | Lava King | circle+shatter | orange, black, red | embers | fountain | Cracking magma surface, lava drip trails |
+| 23 | Ice Monarch | snowflake | crystalline blue, white | crystals | shatter | Elaborate fractal snowflake, ice shards everywhere |
+| 24 | Shadow Blade | cross+spin | black, dark red | streaks | burst | Dark spinning cross, slashing trail streaks |
+| 25 | Aurora Borealis | ring+prismatic | green, blue, purple | ribbons | bloom | Color-shifting aurora, ribbon trails, flower death |
+| 26 | Obsidian Mirror | diamond+prismatic | black, iridescent | sparkles | ring | Reflective black with prismatic edge reflections |
+| 27 | Storm Eye | spiral+spin | gray, electric white | waves | vortex | Spinning tornado, wave trails, vortex death |
+| 28 | Jade Emperor | hexagon | deep jade, gold | sparkles | spiral | Eastern luxury, jade green with gold filigree |
+| 29 | Cosmic Rift | slit | space black, bright cyan, magenta | streaks | implosion | Dimensional tear, energy leak trails |
+| 30 | Phoenix Rising | star5+pulse | orange, red, gold | feathers | fountain | Rising firebird, feather flame trails |
+
+**Tier 4 (Score 400): "Legendary" -- 10 themes**
+
+| # | Name | Ball | Colors | Trail | Explosion | Key Visual Identity |
+|---|------|------|--------|-------|-----------|-------------------|
+| 31 | Supernova | circle+corona+pulse | white-hot, yellow, orange | flames | nova | Pulsating star, nuclear wind, nova death |
+| 32 | Dark Matter | singularity+ripple | transparent, distortion gray | waves | implosion | Gravity lens distortion, warping nearby particles |
+| 33 | Crystal Prism | prism+prismatic | rainbow cycling | sparkles | ring | Spinning prism, rainbow refraction everywhere |
+| 34 | Berserker | star6+pulse | angry red, fire orange | flames | burst | Aggressive spiky pulsation, rage flames |
+| 35 | Time Warp | gear+spin | clockwork gold, temporal blue | dots | spiral | Clock-like spinning, dust particle slowdown feel |
+| 36 | Elemental Fury | diamond+morph | cycling fire/water/earth/air | waves | nova | Color cycling through 4 element palettes |
+| 37 | Celestial Dragon | spiral+orbit | gold, star white | sparkles | spiral | Gold spiral with orbiting star points |
+| 38 | Quantum Flux | doubleRing+phase | blue, probability cloud white | sparkles | fractal | Dual-state blinking, probability cloud trails |
+| 39 | Abyssal Lord | eye+breathe | deep ocean, bioluminescent teal | bubbles | cascade | Deep sea eye with angler light, bioluminescent |
+| 40 | Diamond Forge | diamond+prismatic | brilliant white, rainbow fire | crystals | shatter | Faceted diamond, brilliant sparkle cut shatter |
+
+**Tier 5 (Score 500): "Transcendence" -- 10 themes**
+
+| # | Name | Ball | Colors | Trail | Explosion | Key Visual Identity |
+|---|------|------|--------|-------|-----------|-------------------|
+| 41 | Big Bang | circle+corona | white, all colors expanding | sparkles | nova | Universe birth, cosmic expansion, everything radiates |
+| 42 | Event Horizon | singularity+orbit | black, Hawking radiation gold | waves | vortex | Accretion disk orbits, spaghettification death |
+| 43 | Neural Network | cross+orbit | brain electric pink, blue | lightning | fractal | Connected node points, synapse firing trails |
+| 44 | DNA Helix | helix+spin | bio green, blue | ribbons | bloom | Spinning double helix, chromosome-like ribbons |
+| 45 | Pure Singularity | singularity+ripple | pure energy white, gold | streaks | implosion | Point of converging energy, reality-tearing trails |
+| 46 | Antimatter | circle+phase | inverted current phase color | shadows | nova | Negative-space ball, annihilation flash death |
+| 47 | Fourth Dimension | tesseract+spin | dimensional blue, purple | waves | fractal | Rotating hypercube projection, folded space trails |
+| 48 | God Particle | circle+ripple | Higgs gold, field blue | sparkles | bloom | Quantum field excitation, particle creation trails |
+| 49 | Omega Point | circle+breathe | all colors converging to white | ribbons | spiral | Convergence of all colors, destiny-like trails |
+| 50 | The Architect | cube+spin | wireframe white, blueprint blue | code | fractal | Blueprint/wireframe aesthetic, construction trails |
+
+### 2C: Theme Selection Logic (in theme_registry.dart)
+
+```dart
+class ThemeRegistry {
+  static const List<List<VisualTheme>> themes = [
+    [], // tier 0: no themes (classic)
+    [/* 10 tier 1 themes */],
+    [/* 10 tier 2 themes */],
+    [/* 10 tier 3 themes */],
+    [/* 10 tier 4 themes */],
+    [/* 10 tier 5 themes */],
+  ];
+
+  /// Select theme for a given score milestone.
+  /// rotationIndex is persisted per-tier so each game shows a different variation.
+  static VisualTheme? selectTheme(int score, Map<int, int> rotationIndices) {
+    final tier = _scoreToTier(score);
+    if (tier == 0) return null; // classic look
+
+    final variations = themes[tier];
+    final idx = (rotationIndices[tier] ?? 0) % variations.length;
+    return variations[idx];
+  }
+
+  static int _scoreToTier(int score) {
+    if (score >= 500) return 5;
+    if (score >= 400) return 4;
+    if (score >= 300) return 3;
+    if (score >= 200) return 2;
+    if (score >= 100) return 1;
+    return 0;
+  }
+
+  /// Advance the rotation index for a tier (called when theme activates)
+  static int advanceRotation(int tier, int currentIndex) {
+    return (currentIndex + 1) % 10;
+  }
+}
+```
+
+---
+
+## Part 3: Parameterized Rendering System
+
+### 3A: ball_painters.dart -- Ball Shape Drawing Functions (~700-900 lines)
+
+This file contains one static method per BallShape enum value. Each method takes `Canvas`, `double radius`, `List<Color> colors`, `double glowPhase`, `double intensity` and draws the shape at origin (caller handles canvas translate/save/restore).
+
+Key implementation details for each shape:
+
+- **circle**: Existing `_drawPhase1Sphere` logic. Radial gradient with specular highlight.
+- **hexagon**: `Path` with 6 vertices at radius, filled with radial gradient.
+- **star5/star6**: Alternating outer/inner vertices. Outer at radius, inner at radius*0.4.
+- **pentagon**: 5 vertices path, radial gradient fill.
+- **diamond**: Existing `_drawPhase3Diamond` logic (4-vertex rhombus).
+- **gear**: Circle with N teeth (rectangular protrusions). Use `Path` with `addRect` for each tooth.
+- **crescent**: Two overlapping circles subtracted. Use `Path.combine(PathOperation.difference, ...)`.
+- **crown**: 3-pointed crown shape via path. Base arc + 3 triangular points.
+- **cross**: Axis-aligned plus shape via `Path` with 12 vertices.
+- **cube**: Isometric cube - 3 visible faces drawn as parallelograms with slightly different shades.
+- **spiral**: Fibonacci spiral path drawn as thick stroke, not fill.
+- **eye**: Vesica piscis (two arc intersections). Upper and lower arcs with a circle pupil.
+- **snowflake**: 6 arms drawn as lines with branches at 60-degree angles.
+- **bolt**: Zigzag lightning bolt path (5-7 vertices).
+- **prism**: Equilateral triangle with refraction gradient.
+- **leaf**: Symmetric bezier curves forming leaf shape with a center vein line.
+- **ring**: Existing `_drawPhase2Ring` logic (circle with stroke style).
+- **slit**: Existing `_drawPhase4Slit` logic (narrow horizontal rect).
+- **singularity**: Existing `_drawPhase5Singularity` logic (black circle with aura).
+- **doubleRing**: Two concentric ring strokes at different rotation speeds.
+- **helix**: Two intertwined sine curves drawn in perspective.
+- **tesseract**: 8 vertices of a hypercube projected to 2D, with edges connecting them.
+
+Each method is 30-50 lines. Total approximately 700-900 lines.
+
+**Ball effects** are applied as a wrapper around the base shape draw. In `theme_renderer.dart`:
+
+```dart
+static void drawThemedBall(Canvas canvas, VisualTheme theme, double pr,
+    double glowPhase, double intensity, double stretch) {
+  canvas.save();
+  canvas.scale(stretch, 1.0 / stretch);
+
+  // Apply effect transforms before drawing shape
+  switch (theme.ballEffect) {
+    case BallEffect.pulse:
+      final scale = 1.0 + sin(glowPhase * 3 * theme.ballEffectSpeed) * 0.12;
+      canvas.scale(scale, scale);
+      break;
+    case BallEffect.spin:
+      canvas.rotate(glowPhase * 2 * theme.ballEffectSpeed);
+      break;
+    case BallEffect.prismatic:
+      // Hue-shift the colors based on glowPhase
+      // (colors are modified before passing to shape painter)
+      break;
+    // ... etc
+  }
+
+  // Draw glow aura
+  final glowR = pr + theme.ballGlowRadius + sin(glowPhase) * 3 * intensity;
+  canvas.drawCircle(Offset.zero, glowR, Paint()
+    ..color = effectiveColors[0].withValues(alpha: theme.ballGlowIntensity * intensity)
+    ..maskFilter = MaskFilter.blur(BlurStyle.normal, theme.ballGlowRadius));
+
+  // Draw base shape
+  BallPainters.draw(theme.ballShape, canvas, pr, effectiveColors, glowPhase, intensity);
+
+  canvas.restore();
+}
+```
+
+### 3B: trail_painters.dart -- Trail Particle Drawing (~500-600 lines)
+
+Trail rendering is split into two concerns:
+1. **Spawn behavior** (in game_engine.dart): How trail particles are created (position, velocity, life, radius). This is parameterized by `TrailStyle`.
+2. **Draw behavior** (in trail_painters.dart): How each particle is rendered on canvas.
+
+For spawn behavior, the engine's `_spawnTrailParticles()` method will be modified to accept the active theme and adjust spawn parameters:
+
+```dart
+void _spawnTrailParticles(double dt) {
+  if (player.velocityX.abs() < 50) return;
+  final theme = activeTheme;
+  final cap = (theme != null) ? (80 * theme.trailDensity) : (eliteUnlocked ? 100 : 80);
+  if (trailParticles.length >= cap) return;
+
+  // ... spawn with theme-appropriate parameters
+  if (theme != null) {
+    TrailSpawner.spawn(theme.trailStyle, ...);
+  } else {
+    // Classic spawn logic
+  }
+}
+```
+
+For draw behavior, each `TrailStyle` has a draw method:
+
+- **dots**: Existing behavior (circle with blur).
+- **streaks**: Elongated ellipse oriented along velocity vector. Use `canvas.save(); canvas.rotate(atan2(vy, vx)); canvas.drawOval(...)`.
+- **flames**: Triangle pointing upward (opposite velocity), with flicker alpha.
+- **sparkles**: 4-pointed star shape. Draw two overlapping thin diamonds.
+- **ribbons**: Connected line between consecutive particles (requires accessing previous particle position -- store as extra field or just draw elongated shapes).
+- **bubbles**: Circle with stroke style (hollow) plus slight upward drift.
+- **embers**: Circle with gravity-enhanced downward drift (gravity already in Particle model).
+- **crystals**: Small angular polygon (random 4-6 vertices at varying radii).
+- **lightning**: Short line segment at random angle from particle center.
+- **shadows**: Circle with very low alpha and large blur radius.
+- **waves**: Sine-modulated position offset applied during draw.
+- **droplets**: Teardrop shape: circle at bottom, point at top (in velocity direction).
+- **code**: Small filled rectangle (3x6 pixels).
+- **feathers**: Curved thin arc shape.
+- **shards**: Sharp triangle fragment oriented along velocity.
+
+### 3C: explosion_painters.dart -- Death Explosion Patterns (~400-500 lines)
+
+Each `ExplosionPattern` is implemented as a spawn function that creates particles with specific positions, velocities, and properties. These replace the existing `_spawnExplosion()` method.
+
+```dart
+class ExplosionSpawner {
+  static void spawn(ExplosionPattern pattern, List<Particle> particles,
+      double x, double y, List<Color> colors, int count, double life,
+      double gravity, Random rng) {
+    particles.clear();
+    switch (pattern) {
+      case ExplosionPattern.burst: _spawnBurst(...); break;
+      case ExplosionPattern.spiral: _spawnSpiral(...); break;
+      // ... etc
+    }
+  }
+}
+```
+
+Key patterns:
+- **burst**: Existing random radial blast logic.
+- **spiral**: Existing golden-ratio spiral (from elite death).
+- **ring**: Particles spawned in concentric rings expanding outward at equal angular spacing.
+- **fountain**: Particles spawned upward with high gravity so they arc back down.
+- **vortex**: Particles with tangential velocity (spiral inward or outward).
+- **shatter**: Angular fragments with low gravity, dispersing in quadrants.
+- **bloom**: Particles follow petal curves (polar equation `r = cos(n*theta)`).
+- **lightning**: Recursive branching - main trunk with random sub-branches.
+- **cascade**: Particles fall downward in a waterfall pattern.
+- **implosion**: Particles start at large radius, converge to center, then burst outward.
+- **nova**: Two-phase: first frame places particles at small radius with inward velocity, they compress then reverse.
+- **fractal**: Tree-branching pattern using recursive angle subdivision.
+
+### 3D: theme_renderer.dart -- Master Dispatch (~300-400 lines)
+
+This file is the main integration point. It provides static methods that GamePainter calls instead of its current hardcoded draw methods:
+
+```dart
+class ThemeRenderer {
+  /// Draw the player ball with theme or classic look
+  static void drawBall(Canvas canvas, GameEngine engine, VisualTheme? theme,
+      Color visibleAccent, Color fgColor, bool inverted) {
+    if (theme == null) {
+      // Delegate to classic phase-based drawing (existing code stays in game_painter.dart)
+      return;
+    }
+    final effectiveTheme = inverted ? theme.withInversion() : theme;
+    _drawThemedBall(canvas, effectiveTheme, engine);
+  }
+
+  /// Draw trail particles with theme style
+  static void drawTrailParticles(Canvas canvas, GameEngine engine,
+      VisualTheme? theme, Color visibleAccent) { ... }
+
+  /// Draw magnet lines/particles with theme style
+  static void drawMagnetEffect(Canvas canvas, Size size, GameEngine engine,
+      VisualTheme? theme, Color visibleAccent) { ... }
+
+  /// Draw obstacles with theme style
+  static void drawObstacles(Canvas canvas, Size size, GameEngine engine,
+      VisualTheme? theme, Color fgColor, Color visibleAccent) { ... }
+
+  /// Draw ambient particles with theme style
+  static void drawAmbientParticles(Canvas canvas, GameEngine engine,
+      VisualTheme? theme, Color visibleAccent) { ... }
+
+  /// Draw death explosion with theme style
+  static void drawDeathParticles(Canvas canvas, GameEngine engine,
+      VisualTheme? theme, Color visibleAccent) { ... }
+
+  /// Draw wall accents with theme style
+  static void drawWalls(Canvas canvas, Size size, GameEngine engine,
+      VisualTheme? theme, Color visibleAccent) { ... }
+}
+```
+
+---
+
+## Part 4: Engine Changes (game_engine.dart)
+
+### 4A: New State Fields
+
+```dart
+// ── V3: Visual Theme System ──
+VisualTheme? activeTheme;         // null = classic look (score < 100)
+int currentThemeTier = 0;         // 0-5
+int themeVariationIndex = 0;      // 0-9 within current tier
+bool themeJustActivated = false;  // flag for theme transition VFX
+double themeTransitionTimer = 0;  // animation timer for theme entrance
+VisualTheme? previousTheme;       // for crossfade during transition
+
+// DFA state for post-500 procedural themes
+int dfaState = 0;
+
+// Per-tier rotation indices (persisted)
+Map<int, int> themeRotationIndices = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+```
+
+### 4B: Theme Activation Logic
+
+Add a new method `_checkThemeTransition()` called from the scoring loop alongside `_updatePhase()`, `_checkShieldAward()`, etc.
+
+```dart
+void _checkThemeTransition() {
+  final newTier = _scoreToThemeTier(score);
+  if (newTier > currentThemeTier) {
+    // Theme tier upgrade
+    previousTheme = activeTheme;
+    currentThemeTier = newTier;
+
+    if (newTier <= 5) {
+      activeTheme = ThemeRegistry.selectTheme(score, themeRotationIndices);
+      // Advance rotation for next game at this tier
+      themeRotationIndices[newTier] =
+          ThemeRegistry.advanceRotation(newTier, themeRotationIndices[newTier] ?? 0);
+    } else {
+      // Post-500 DFA
+      activeTheme = _dfaSelectTheme();
+    }
+
+    themeJustActivated = true;
+    themeTransitionTimer = 1.0;
+    screenShakeIntensity = 4.0;
+
+    // Theme activation celebration particles
+    _spawnThemeActivationBurst();
+  }
+}
+
+int _scoreToThemeTier(int score) {
+  if (score >= 500) return 5;
+  if (score >= 400) return 4;
+  if (score >= 300) return 3;
+  if (score >= 200) return 2;
+  if (score >= 100) return 1;
+  return 0;
+}
+```
+
+### 4C: Theme State Reset
+
+In `startGame()`:
+```dart
+activeTheme = null;
+currentThemeTier = 0;
+themeJustActivated = false;
+themeTransitionTimer = 0;
+previousTheme = null;
+dfaState = 0;
+```
+
+In `revive()`:
+```dart
+// Theme persists across revive -- do NOT reset
+themeJustActivated = false;
+themeTransitionTimer = 0;
+```
+
+### 4D: Modified Spawn Methods
+
+`_spawnTrailParticles()`, `_spawnMagnetParticles()`, `_spawnExplosion()`, and `_spawnOneAmbientParticle()` all need to check `activeTheme` and delegate to the theme's parameters:
+
+```dart
+void _spawnTrailParticles(double dt) {
+  if (player.velocityX.abs() < 50) return;
+  final theme = activeTheme;
+
+  if (theme != null) {
+    _spawnThemedTrailParticles(dt, theme);
+    return;
+  }
+
+  // ... existing classic logic
+}
+```
+
+Each themed spawn variant reads the theme's trail style, colors, density, life, and width to parameterize the particle creation.
+
+### 4E: Modified Explosion
+
+```dart
+void _spawnExplosion(double x, double y) {
+  final theme = activeTheme;
+  if (theme != null) {
+    ExplosionSpawner.spawn(
+      theme.explosionPattern, particles, x, y,
+      theme.explosionColors, theme.explosionParticleCount,
+      theme.explosionLife, theme.explosionGravity, _rng,
+    );
+    return;
+  }
+
+  // ... existing classic logic (elite/non-elite)
+}
+```
+
+---
+
+## Part 5: Painter Changes (game_painter.dart)
+
+### 5A: Integration with ThemeRenderer
+
+The `paint()` method structure stays the same, but each draw method checks for an active theme and delegates:
+
+```dart
+void _drawObstacles(Canvas canvas, Size size) {
+  if (engine.activeTheme != null) {
+    ThemeRenderer.drawObstacles(canvas, size, engine,
+        engine.activeTheme, fgColor, visibleAccent);
+    return;
+  }
+  // ... existing classic obstacle drawing
+}
+```
+
+Same pattern for `_drawPlayer`, `_drawTrailParticles`, `_drawMagnetLines`, `_drawMagnetParticles`, `_drawAmbientParticles`, `_drawDeathParticles`.
+
+### 5B: Theme Transition VFX
+
+Add a new `_drawThemeTransition()` method called from `paint()`:
+
+```dart
+void _drawThemeTransition(Canvas canvas, Size size) {
+  if (engine.themeTransitionTimer <= 0) return;
+  final progress = 1.0 - engine.themeTransitionTimer / 1.0;
+
+  // Expanding color ring from player
+  final theme = engine.activeTheme;
+  if (theme == null) return;
+
+  final radius = progress * 400.0;
+  final alpha = (1.0 - progress) * 0.6;
+  final ringColor = theme.ballColors.first;
+  canvas.drawCircle(
+    Offset(engine.player.x, engine.player.y),
+    radius,
+    Paint()
+      ..color = ringColor.withValues(alpha: alpha)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6.0 - progress * 5.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+  );
+
+  // Screen color wash
+  final washAlpha = (1.0 - progress) * 0.1;
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, size.width, size.height),
+    Paint()..color = ringColor.withValues(alpha: washAlpha),
+  );
+}
+```
+
+### 5C: Keeping Classic Code Path
+
+All existing phase-based drawing code (phases 1-5, elite variants) remains in game_painter.dart as the "classic" code path. When `engine.activeTheme == null` (score < 100), the classic code path executes exactly as before. This ensures backward compatibility and that the first 100 points of every game look exactly as they do now.
+
+### 5D: Phase Color Interaction When Theme is Active
+
+When a theme is active, the phase accent color is still calculated by the engine (for non-visual uses like HUD color). But the painter uses the theme's colors for visual elements instead:
+
+```dart
+Color get visibleAccent {
+  if (engine.activeTheme != null) {
+    final theme = _inverted
+        ? engine.activeTheme!.withInversion()
+        : engine.activeTheme!;
+    return theme.ballColors.first;
+  }
+  // ... existing logic
+}
+```
+
+The phase system continues to drive difficulty mechanics (speed, gaps, magnet force) regardless of theme.
+
+---
+
+## Part 6: Phase 5 Inversion Compatibility
+
+Phase 5 inverts the background to white. All 50 themes must remain visible.
+
+**Strategy**:
+1. Each `VisualTheme` can optionally provide `invertedBallColors`, `invertedTrailColors`, `invertedObstacleColors`. If provided, these override the normal colors during phase 5.
+2. If not provided, the `withInversion()` method auto-generates inverted colors by checking luminance. Any color with luminance > 0.7 (too close to white) gets its lightness reduced to 0.3.
+3. Themes that are already dark (like Void Walker, Shadow Blade, Abyssal Lord) need no adjustment.
+4. Themes that are light (like Arctic Frost, Phantom Flame, The Architect) need explicit inverted color overrides to maintain their identity.
+
+**Testing approach**: Each theme must be verified at all 5 phases. The most critical check is phase 5 where the background is white.
+
+---
+
+## Part 7: Wall Appearance Changes
+
+Currently, walls are invisible (no explicit wall drawing). Obstacles protrude from the wall edges with gradient fills. The wall "style" is implicit.
+
+**Implementation**:
+- Add `_drawWalls()` to the paint loop, called before obstacles
+- Each `WallStyle` draws a subtle accent along the left and right edges:
+
+```dart
+void _drawWalls(Canvas canvas, Size size) {
+  final theme = engine.activeTheme;
+  if (theme == null || theme.wallStyle == WallStyle.clean) return;
+
+  WallPainters.draw(theme.wallStyle, canvas, size,
+      theme.wallAccentColor, theme.wallGlowIntensity, engine.gameTime);
+}
+```
+
+Wall style implementations:
+- **glow**: Thin gradient strip along each wall edge, color = wallAccentColor
+- **pulse**: Same as glow but alpha oscillates with `sin(gameTime)`
+- **drip**: Small drip particles spawning at random points along wall edges (rendered inline, not as engine particles)
+- **crack**: Static crack-line paths drawn from wall edge inward
+- **electric**: Jagged line drawn along wall edge that changes shape each frame
+- **frost**: Crystalline triangle patterns along wall edge
+- **flame**: Upward-flickering triangle shapes along wall edge
+
+---
+
+## Part 8: DFA Logic for Post-500
+
+After score 500, the player has seen all 5 tier themes. The DFA generates new combined themes procedurally.
+
+### DFA Design
+
+The DFA has states that transition based on score. Each state maps to a composite theme built by mixing components from existing themes.
+
+```dart
+class DfaThemeGenerator {
+  static VisualTheme generate(int score, int dfaState, Map<int, int> rotations) {
+    // Deterministic selection based on score
+    final seed = score ~/ 50; // new theme every 50 points after 500
+
+    // Select components from different tiers
+    final ballTier = ((seed * 7 + 3) % 5) + 1;
+    final ballVar = ((seed * 13 + 5) % 10);
+    final trailTier = ((seed * 11 + 7) % 5) + 1;
+    final trailVar = ((seed * 17 + 11) % 10);
+    final explosionTier = ((seed * 19 + 13) % 5) + 1;
+    final explosionVar = ((seed * 23 + 17) % 10);
+
+    final ballSource = ThemeRegistry.themes[ballTier][ballVar];
+    final trailSource = ThemeRegistry.themes[trailTier][trailVar];
+    final explosionSource = ThemeRegistry.themes[explosionTier][explosionVar];
+
+    // Compose a new theme from these sources
+    return VisualTheme(
+      id: 'dfa_$seed',
+      displayName: 'Beyond ${500 + seed * 50}',
+      tier: 6, // DFA tier
+      variation: seed,
+      ballShape: ballSource.ballShape,
+      ballColors: ballSource.ballColors,
+      ballGlowRadius: ballSource.ballGlowRadius,
+      ballGlowIntensity: ballSource.ballGlowIntensity,
+      ballEffect: ballSource.ballEffect,
+      ballEffectSpeed: ballSource.ballEffectSpeed,
+      trailStyle: trailSource.trailStyle,
+      trailColors: trailSource.trailColors,
+      trailWidth: trailSource.trailWidth,
+      trailLife: trailSource.trailLife,
+      trailDensity: trailSource.trailDensity,
+      obstacleStyle: explosionSource.obstacleStyle,
+      obstacleColors: _blendColors(ballSource.obstacleColors, trailSource.obstacleColors),
+      obstacleGlowIntensity: (ballSource.obstacleGlowIntensity + trailSource.obstacleGlowIntensity) / 2,
+      explosionPattern: explosionSource.explosionPattern,
+      explosionColors: explosionSource.explosionColors,
+      explosionParticleCount: explosionSource.explosionParticleCount,
+      explosionLife: explosionSource.explosionLife,
+      explosionGravity: explosionSource.explosionGravity,
+      magnetStyle: trailSource.magnetStyle,
+      magnetColors: trailSource.magnetColors,
+      ambientStyle: ballSource.ambientStyle,
+      ambientColors: ballSource.ambientColors,
+      ambientCount: ballSource.ambientCount,
+      wallStyle: explosionSource.wallStyle,
+      wallAccentColor: explosionSource.wallAccentColor,
+      wallGlowIntensity: explosionSource.wallGlowIntensity,
+    );
+  }
+
+  static List<Color> _blendColors(List<Color> a, List<Color> b) {
+    return [
+      Color.lerp(a.first, b.first, 0.5)!,
+      Color.lerp(a.last, b.last, 0.5)!,
+    ];
+  }
+}
+```
+
+The DFA transitions every 50 points after 500 (at 550, 600, 650, etc.). Each transition triggers the same theme transition VFX (expanding ring, screen shake).
+
+The deterministic seed-based selection ensures that the same score always produces the same composite theme, so the experience is reproducible (important for sharing/screenshots).
+
+---
+
+## Part 9: Storage/Persistence Changes
+
+### New fields in StorageService:
+
+```dart
+static const _themeRotationKey = 'theme_rotations'; // JSON string: {"1":3,"2":1,...}
+static const _highScoreModeKey = 'hs_mode';         // bool: true = easy
+```
+
+New methods:
+
+```dart
+// Theme rotation indices
+Map<int, int> getThemeRotations() {
+  final json = _prefs.getString(_themeRotationKey);
+  if (json == null) return {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+  return Map<int, int>.from(jsonDecode(json));
+}
+
+Future<void> setThemeRotations(Map<int, int> rotations) async {
+  await _prefs.setString(_themeRotationKey, jsonEncode(rotations));
+}
+
+// High score mode tracking
+bool get highScoreIsEasyMode => _prefs.getBool(_highScoreModeKey) ?? false;
+Future<void> setHighScoreMode(bool easyMode) =>
+    _prefs.setBool(_highScoreModeKey, easyMode);
+```
+
+### Loading in main.dart:
+
+```dart
+// After loading engine state:
+engine.themeRotationIndices = storage.getThemeRotations();
+```
+
+### Saving in game_screen.dart:
+
+```dart
+// In _onDeath(), after theme tier advances:
+if (engine.themeJustActivated) {
+  engine.themeJustActivated = false;
+  storage.setThemeRotations(engine.themeRotationIndices);
+  // Play theme transition sound
+  ref.read(audioServiceProvider).play('theme_activate');
+}
+```
+
+---
+
+## Part 10: Audio Integration
+
+Add a new sound effect in audio_service.dart for theme activation:
+
+```dart
+_cachedBytes['theme_activate'] = _generateThemeActivateSfx();
+```
+
+This should be a distinctive "power-up" sound, different from phase transitions and elite unlock. Recommend a rising shimmer/chime that signals transformation.
+
+---
+
+## Part 11: Elite System Integration
+
+The existing elite system (ball variants per phase, enhanced trails, golden spiral death) becomes redundant once themes are active, since themes replace ALL visual elements. However, elite is still relevant for scores below 100 (the first 100 points of every run before the first theme activates).
+
+**Strategy**: Keep the elite system exactly as-is for the classic code path (score < 100). Once a theme activates at score 100, the theme's visuals completely replace both the phase visuals AND the elite visuals. The `eliteUnlocked` flag still exists and is still earned at score 100, but its visual effect is subsumed by the theme.
+
+This means: In `_drawPlayer()`, the check becomes:
+
+```dart
+if (engine.activeTheme != null) {
+  ThemeRenderer.drawBall(...);
+} else if (engine.eliteUnlocked) {
+  _drawElitePlayer(...);
+} else {
+  // Classic phase-based player
+}
+```
+
+---
+
+## Part 12: Implementation Sequence
+
+### Phase A: Bug Fixes (Estimated 2-3 hours)
+1. Fix bug 9 (player position on revive) -- simplest, immediate impact
+2. Fix bug 4 (isNewHighScore after revive) -- one line
+3. Fix bug 5 (isTouching in revive) -- one line
+4. Fix bug 8 (shield flags in revive) -- two lines
+5. Fix bug 1 (stale near-high-score) -- add `_scoreAtRevive` field
+6. Fix bug 3 (tierJustUnlocked consumption) -- refactor in game_screen.dart
+7. Fix bug 2 (cross-mode tier inflation) -- add `_highScoreMode` field + storage
+8. Fix bug 6 (particle cleanup) -- refresh ambient colors on state transitions
+9. Fix bug 7 (DST streak) -- use noon-normalized comparison
+
+### Phase B: Data Architecture (Estimated 3-4 hours)
+1. Create `visual_theme.dart` with all enums and data class
+2. Create `theme_registry.dart` with the first 10 themes (Tier 1) as a proof of concept
+3. Create storage persistence for theme rotations
+
+### Phase C: Rendering Infrastructure (Estimated 6-8 hours)
+1. Create `ball_painters.dart` with all ~23 ball shape implementations
+2. Create `trail_painters.dart` with all ~15 trail style implementations
+3. Create `explosion_painters.dart` with all ~12 explosion pattern implementations
+4. Create `theme_renderer.dart` as the master dispatch
+
+### Phase D: Engine Integration (Estimated 3-4 hours)
+1. Add theme state fields to game_engine.dart
+2. Implement `_checkThemeTransition()` in the scoring loop
+3. Modify `_spawnTrailParticles()`, `_spawnMagnetParticles()`, `_spawnExplosion()`, `_spawnOneAmbientParticle()`
+4. Add theme transition VFX (celebration burst, screen shake)
+
+### Phase E: Painter Integration (Estimated 3-4 hours)
+1. Modify game_painter.dart to delegate to ThemeRenderer when theme is active
+2. Add theme transition VFX drawing
+3. Add wall drawing
+4. Implement Phase 5 inversion compatibility for themed rendering
+
+### Phase F: Complete Theme Definitions (Estimated 8-10 hours)
+1. Define Tier 2 themes (10)
+2. Define Tier 3 themes (10)
+3. Define Tier 4 themes (10)
+4. Define Tier 5 themes (10)
+5. DFA generator for post-500
+
+### Phase G: Polish and Testing (Estimated 4-6 hours)
+1. Test all 50 themes across all 5 phases
+2. Test phase 5 inversion for all themes
+3. Test light/dark UI theme compatibility
+4. Test easy/hard mode compatibility
+5. Performance profiling (particle caps, draw call efficiency)
+6. Test theme rotation persistence
+7. Test DFA at scores 550, 600, 650, etc.
+8. Test all bug fixes (revive flow, tier inflation, etc.)
+
+---
+
+## Part 13: Performance Considerations
+
+1. **Particle caps**: Each theme's `trailDensity` and `ambientCount` must be bounded. Maximum trail particles = 120 (up from 100 for themes). Maximum ambient = 40.
+
+2. **Paint object reuse**: Create `Paint` objects once and reuse them within draw methods. Avoid allocating `Paint()` inside loops.
+
+3. **Path caching**: For complex shapes (gear, snowflake, tesseract), compute the `Path` once when the theme activates and cache it. Scale/rotate the cached path instead of rebuilding.
+
+4. **MaskFilter caching**: `MaskFilter.blur()` creates a new object each call. Cache frequently-used blur values.
+
+5. **Color computation**: `withValues(alpha:)` creates a new Color object. For hot paths (trail/ambient particle loops), pre-compute the alpha-modified color once outside the loop.
+
+6. **Conditional drawing**: If a wall style is `clean`, skip wall drawing entirely. If ambient count is 0, skip ambient drawing. Avoid unnecessary work.
+
+---
+
+## Part 14: Testing Strategy
+
+### Unit Tests
+- `VisualTheme.withInversion()` produces colors with sufficient contrast against white
+- `ThemeRegistry.selectTheme()` returns correct theme for each score
+- `ThemeRegistry.advanceRotation()` correctly cycles through 10 variations
+- `DfaThemeGenerator.generate()` is deterministic for the same score
+- All 9 bug fixes have regression tests
+
+### Visual Integration Tests
+- Manually verify each of the 50 themes at their activation score
+- Screenshot comparison at Phase 1 (dark bg) and Phase 5 (white bg) for each theme
+- Test theme transitions at exact score boundaries (99->100, 199->200, etc.)
+- Test revive mid-theme (theme should persist)
+- Test restart (theme should reset to null)
+
+### Performance Tests
+- Profile frame time with most expensive theme (highest particle count + most complex ball shape)
+- Ensure steady 60fps on mid-range device (e.g., Pixel 4a, iPhone 11)
+- Measure memory allocation rate during gameplay with themes active
+
+---
+
+## Summary of New Files
+
+| File | Lines (est) | Purpose |
+|------|-------------|---------|
+| `lib/features/game/visual/visual_theme.dart` | 250-300 | Data class + enums |
+| `lib/features/game/visual/theme_registry.dart` | 1200-1500 | 50 theme definitions + selection + DFA |
+| `lib/features/game/visual/ball_painters.dart` | 700-900 | ~23 ball shape draw functions |
+| `lib/features/game/visual/trail_painters.dart` | 500-600 | ~15 trail style draw functions |
+| `lib/features/game/visual/explosion_painters.dart` | 400-500 | ~12 explosion pattern spawn functions |
+| `lib/features/game/visual/theme_renderer.dart` | 300-400 | Master dispatch + theme transition VFX |
+
+**Total new code**: ~3,350-4,200 lines across 6 new files.
+
+**Modifications to existing files**: ~200-300 lines of changes across game_engine.dart, game_painter.dart, game_screen.dart, storage_service.dart, providers.dart, main.dart, audio_service.dart.
+
+### Critical Files for Implementation
+- `d:\Polarity\polarity_app\lib\features\game\engine\game_engine.dart` - Core state management: bug fixes, theme tracking state, theme activation logic, modified particle spawn methods
+- `d:\Polarity\polarity_app\lib\features\game\painters\game_painter.dart` - Rendering integration: delegate to ThemeRenderer when theme active, keep classic code path, add theme transition VFX
+- `d:\Polarity\polarity_app\lib\core\constants.dart` - Reference for phase thresholds, tier thresholds, and milestone scores that the theme system must align with
+- `d:\Polarity\polarity_app\lib\features\game\screens\game_screen.dart` - Event consumption: theme activation audio/haptics, tier unlock fix, revive flow fixes
+- `d:\Polarity\polarity_app\lib\services\storage_service.dart` - Persistence: theme rotation indices, high score mode tracking, bug fix for cross-mode tier inflation
