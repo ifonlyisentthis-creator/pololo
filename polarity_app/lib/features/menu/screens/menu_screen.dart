@@ -196,24 +196,21 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                             _IconButton(
                               icon: Icons.emoji_events_outlined,
                               color: fgColor,
-                              onTap: () {
+                              onTap: () async {
                                 if (_navActionInProgress) return;
                                 _navActionInProgress = true;
                                 ref.read(audioServiceProvider).play('menu');
                                 ref
                                     .read(hapticServiceProvider)
                                     .selectionClick();
-                                ref
+                                await ref
                                     .read(leaderboardServiceProvider)
-                                    .showLeaderboard();
-                                Future<void>.delayed(
-                                  const Duration(milliseconds: 300),
-                                  () {
-                                    if (mounted) {
-                                      _navActionInProgress = false;
-                                    }
-                                  },
-                                );
+                                    .showLeaderboard(
+                                      easyMode: ref.read(easyModeProvider),
+                                    );
+                                if (mounted) {
+                                  _navActionInProgress = false;
+                                }
                               },
                             ),
                             const SizedBox(width: 32),

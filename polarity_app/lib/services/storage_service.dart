@@ -14,6 +14,8 @@ class StorageService {
   static const _streakCountKey = 'streak_count';
   static const _lastPlayDateKey = 'last_play_date';
   static const _highScoreModeKey = 'hs_mode';
+  static const _leaderboardBestEasyKey = 'lb_best_easy';
+  static const _leaderboardBestHardKey = 'lb_best_hard';
   static const _themeRotationsKey = 'theme_rotations';
   static const _rememberThemeAcrossLaunchesKey =
       'remember_theme_across_launches';
@@ -92,6 +94,15 @@ class StorageService {
   bool get highScoreIsEasyMode => _prefs.getBool(_highScoreModeKey) ?? false;
   Future<void> setHighScoreMode(bool easyMode) =>
       _prefs.setBool(_highScoreModeKey, easyMode);
+
+    // --- Leaderboard per-mode local bests (for deduped score submits) ---
+    int get leaderboardBestEasyScore => _prefs.getInt(_leaderboardBestEasyKey) ?? 0;
+    Future<void> setLeaderboardBestEasyScore(int score) =>
+      _prefs.setInt(_leaderboardBestEasyKey, score);
+
+    int get leaderboardBestHardScore => _prefs.getInt(_leaderboardBestHardKey) ?? 0;
+    Future<void> setLeaderboardBestHardScore(int score) =>
+      _prefs.setInt(_leaderboardBestHardKey, score);
 
   // --- Theme Rotation Indices ---
   String get themeRotationsJson => _prefs.getString(_themeRotationsKey) ?? '';

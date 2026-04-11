@@ -20,6 +20,8 @@ class _FakeStorageService extends StorageService {
   bool _eliteUnlocked = false;
   int _milestoneTier = 0;
   bool _rememberThemeAcrossLaunches = true;
+  int _leaderboardBestEasyScore = 0;
+  int _leaderboardBestHardScore = 0;
 
   @override
   int getHighScore() => _highScore;
@@ -103,6 +105,22 @@ class _FakeStorageService extends StorageService {
 
   @override
   Future<void> setHighScoreMode(bool easyMode) async {}
+
+  @override
+  int get leaderboardBestEasyScore => _leaderboardBestEasyScore;
+
+  @override
+  Future<void> setLeaderboardBestEasyScore(int score) async {
+    _leaderboardBestEasyScore = score;
+  }
+
+  @override
+  int get leaderboardBestHardScore => _leaderboardBestHardScore;
+
+  @override
+  Future<void> setLeaderboardBestHardScore(int score) async {
+    _leaderboardBestHardScore = score;
+  }
 
   @override
   Future<void> setThemeRotationsJson(String json) async {}

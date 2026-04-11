@@ -222,14 +222,29 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _audio.play('death');
     _haptics.heavyImpact();
 
+    final storage = ref.read(storageServiceProvider);
+
     if (_engine.isNewHighScore) {
-      final storage = ref.read(storageServiceProvider);
       storage.setHighScore(_engine.highScore);
       storage.setHighScoreMode(_engine.easyMode);
-      ref.read(leaderboardServiceProvider).submitScore(_engine.highScore);
       if (_engine.shouldRequestReview) {
         ref.read(reviewServiceProvider).requestReviewIfEligible();
       }
+    }
+
+    final isEasyRun = _engine.easyMode;
+    final modeBest = isEasyRun
+        ? storage.leaderboardBestEasyScore
+        : storage.leaderboardBestHardScore;
+    if (_engine.score > modeBest) {
+      if (isEasyRun) {
+        storage.setLeaderboardBestEasyScore(_engine.score);
+      } else {
+        storage.setLeaderboardBestHardScore(_engine.score);
+      }
+      ref
+          .read(leaderboardServiceProvider)
+          .submitScore(_engine.score, easyMode: isEasyRun);
     }
 
     // V2: Persist tier if upgraded — Bug fix 3: consume immediately

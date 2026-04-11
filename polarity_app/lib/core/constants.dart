@@ -107,6 +107,24 @@ class GameConstants {
     defaultValue: 'ca-app-pub-3940256099942544/1712485313',
   );
 
+  // Leaderboard IDs (separate hard/easy boards). Override with --dart-define.
+  static const String androidLeaderboardHardId = String.fromEnvironment(
+    'ANDROID_LEADERBOARD_HARD_ID',
+    defaultValue: 'CgkI_placeholder_leaderboard',
+  );
+  static const String androidLeaderboardEasyId = String.fromEnvironment(
+    'ANDROID_LEADERBOARD_EASY_ID',
+    defaultValue: 'CgkI_placeholder_leaderboard_easy',
+  );
+  static const String iosLeaderboardHardId = String.fromEnvironment(
+    'IOS_LEADERBOARD_HARD_ID',
+    defaultValue: 'polarity_leaderboard',
+  );
+  static const String iosLeaderboardEasyId = String.fromEnvironment(
+    'IOS_LEADERBOARD_EASY_ID',
+    defaultValue: 'polarity_leaderboard_easy',
+  );
+
   // ── Revive ──
   static const double reviveInvincibilityDuration = 3.0;
   static const int reviveCountdownSeconds = 3;

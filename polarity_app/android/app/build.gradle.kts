@@ -29,6 +29,9 @@ android {
         manifestPlaceholders["ADMOB_APP_ID"] =
             (project.findProperty("ADMOB_APP_ID") as String?)
                 ?: "ca-app-pub-3940256099942544~3347511713"
+        manifestPlaceholders["PLAY_GAMES_APP_ID"] =
+            (project.findProperty("PLAY_GAMES_APP_ID") as String?)
+                ?: "0"
     }
 
     buildTypes {
