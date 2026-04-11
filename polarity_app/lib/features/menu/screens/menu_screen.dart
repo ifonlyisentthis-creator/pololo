@@ -19,6 +19,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   late Ticker _ticker;
   double _titleOpacity = 0;
   double _buttonsOpacity = 0;
+  bool _navActionInProgress = false;
 
   // Repaint notifier drives ONLY the background painter, no widget rebuild
   final _bgNotifier = _MenuBgNotifier();
@@ -160,6 +161,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                     child: Column(
                       children: [
                         GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: _startGame,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -195,6 +197,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                               icon: Icons.emoji_events_outlined,
                               color: fgColor,
                               onTap: () {
+                                if (_navActionInProgress) return;
+                                _navActionInProgress = true;
                                 ref.read(audioServiceProvider).play('menu');
                                 ref
                                     .read(hapticServiceProvider)
@@ -202,18 +206,28 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                                 ref
                                     .read(leaderboardServiceProvider)
                                     .showLeaderboard();
+                                Future<void>.delayed(
+                                  const Duration(milliseconds: 300),
+                                  () {
+                                    if (mounted) {
+                                      _navActionInProgress = false;
+                                    }
+                                  },
+                                );
                               },
                             ),
                             const SizedBox(width: 32),
                             _IconButton(
                               icon: Icons.tune_outlined,
                               color: fgColor,
-                              onTap: () {
+                              onTap: () async {
+                                if (_navActionInProgress) return;
+                                _navActionInProgress = true;
                                 ref.read(audioServiceProvider).play('menu');
                                 ref
                                     .read(hapticServiceProvider)
                                     .selectionClick();
-                                Navigator.of(context).push(
+                                await Navigator.of(context).push(
                                   PageRouteBuilder(
                                     opaque: true,
                                     pageBuilder: (ctx, a1, a2) =>
@@ -229,6 +243,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                                         const Duration(milliseconds: 250),
                                   ),
                                 );
+                                if (mounted) {
+                                  _navActionInProgress = false;
+                                }
                               },
                             ),
                           ],
@@ -248,9 +265,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   }
 
   void _startGame() {
+    if (_navActionInProgress) return;
+    _navActionInProgress = true;
+
     ref.read(audioServiceProvider).play('menu');
     ref.read(hapticServiceProvider).mediumImpact();
-    Navigator.of(context).push(
+    Navigator.of(context)
+        .push(
       PageRouteBuilder(
         opaque: true,
         pageBuilder: (ctx, a1, a2) => const GameScreen(),
@@ -259,7 +280,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
         },
         transitionDuration: const Duration(milliseconds: 300),
       ),
-    );
+    )
+        .then((_) {
+      if (mounted) {
+        _navActionInProgress = false;
+      }
+    });
   }
 }
 
@@ -277,6 +303,7 @@ class _IconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),

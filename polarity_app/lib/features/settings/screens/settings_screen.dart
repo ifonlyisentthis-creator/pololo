@@ -35,6 +35,7 @@ class SettingsScreen extends ConsumerWidget {
               Row(
                 children: [
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
                       ref.read(audioServiceProvider).play('menu');
                       Navigator.of(context).pop();
@@ -167,6 +168,7 @@ class SettingsScreen extends ConsumerWidget {
                       // Remove Ads / Premium
                       if (adsOn) ...[
                         GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () async {
                             ref.read(hapticServiceProvider).selectionClick();
                             if (!canStartPurchase) {
@@ -251,6 +253,7 @@ class SettingsScreen extends ConsumerWidget {
 
                       // Restore Purchases
                       GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () async {
                           ref.read(hapticServiceProvider).selectionClick();
                           await ref.read(iapServiceProvider).restorePurchases();
@@ -275,6 +278,7 @@ class SettingsScreen extends ConsumerWidget {
                       // Privacy Policy
                       Center(
                         child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () async {
                             ref.read(hapticServiceProvider).selectionClick();
                             final uri =
@@ -375,6 +379,7 @@ class _SettingsTile extends StatelessWidget {
 
           // Custom minimal toggle
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () => onChanged(!value),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),

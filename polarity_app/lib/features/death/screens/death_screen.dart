@@ -221,6 +221,7 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
                               // Revive button
                               if (showReviveButton) ...[
                                 GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
                                   onTap: _onRevive,
                                   child: Container(
                                     width: double.infinity,
@@ -268,6 +269,7 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
 
                               // Restart button
                               GestureDetector(
+                                behavior: HitTestBehavior.opaque,
                                 onTap: () {
                                   if (_actionInProgress) return;
                                   _actionInProgress = true;
@@ -449,6 +451,7 @@ class _BottomAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Column(
         children: [

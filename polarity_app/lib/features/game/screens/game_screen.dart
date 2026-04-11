@@ -29,6 +29,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   int _lastPhase = -1;
   bool _deathFlowStarted = false;
   bool _deathScreenVisible = false;
+  bool _pauseDialogVisible = false;
+  bool _pauseDialogActionInProgress = false;
   int _lastTutorialBucket = -1;
   bool _cachedPainterIsDark = true;
 
@@ -80,10 +82,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Auto-pause when app goes to background
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.hidden) {
       // V5: Also pause during countdown (not just playing)
-      if (_engine.state == GameState.playing ||
-          _engine.state == GameState.countdown) {
+      if ((_engine.state == GameState.playing ||
+              _engine.state == GameState.countdown) &&
+          !_pauseDialogVisible) {
         _engine.pause();
         _showPauseDialog();
       }
@@ -514,6 +517,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _showPauseDialog() {
+    if (!mounted || _pauseDialogVisible) return;
+    _pauseDialogVisible = true;
+    _pauseDialogActionInProgress = false;
+
     // Pause menu overlays the game; freeze simulation/repaint until resume.
     _ticker.muted = true;
     final isDark = ref.read(isDarkThemeProvider);
@@ -528,12 +535,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) {
-            // Back button on pause dialog → resume the game
-            Navigator.of(ctx).pop();
-            _engine.resume();
-            _ticker.muted = false;
-            _lastTime = Duration.zero;
-            _accumulator = 0;
+            _resumeFromPauseDialog(ctx);
           }
         },
         child: Center(
@@ -553,13 +555,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
               ),
               const SizedBox(height: 40),
               GestureDetector(
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _engine.resume();
-                  _ticker.muted = false;
-                  _lastTime = Duration.zero;
-                  _accumulator = 0;
-                },
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _resumeFromPauseDialog(ctx),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 40,
@@ -584,20 +581,21 @@ class _GameScreenState extends ConsumerState<GameScreen>
               ),
               const SizedBox(height: 20),
               GestureDetector(
-                onTap: () {
-                  _ticker.muted = false;
-                  Navigator.of(ctx).pop();
-                  Navigator.of(context).pop();
-                },
-                child: Text(
-                  'QUIT',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w300,
-                    color: fgColor.withValues(alpha: 0.4),
-                    letterSpacing: 4,
-                    decoration: TextDecoration.none,
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _quitFromPauseDialog(ctx),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  child: Text(
+                    'QUIT',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
+                      color: fgColor.withValues(alpha: 0.4),
+                      letterSpacing: 4,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
               ),
@@ -605,7 +603,32 @@ class _GameScreenState extends ConsumerState<GameScreen>
           ),
         ),
       ),
-    );
+    ).whenComplete(() {
+      _pauseDialogVisible = false;
+      _pauseDialogActionInProgress = false;
+    });
+  }
+
+  void _resumeFromPauseDialog(BuildContext ctx) {
+    if (_pauseDialogActionInProgress) return;
+    _pauseDialogActionInProgress = true;
+
+    Navigator.of(ctx).pop();
+    _engine.resume();
+    _ticker.muted = false;
+    _lastTime = Duration.zero;
+    _accumulator = 0;
+  }
+
+  void _quitFromPauseDialog(BuildContext ctx) {
+    if (_pauseDialogActionInProgress) return;
+    _pauseDialogActionInProgress = true;
+
+    _ticker.muted = false;
+    Navigator.of(ctx).pop();
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 }
 
