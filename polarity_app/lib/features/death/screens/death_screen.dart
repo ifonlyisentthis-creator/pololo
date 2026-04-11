@@ -59,13 +59,17 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
     final isDark = ref.watch(isDarkThemeProvider);
     final bgColor = isDark ? Colors.black : Colors.white;
     final fgColor = isDark ? Colors.white : Colors.black;
+    final storage = ref.read(storageServiceProvider);
     final connectivity = ref.read(connectivityServiceProvider);
     final adsEnabled = ref.watch(adsEnabledProvider);
     final isPremium = !adsEnabled; // Paid to remove ads = premium
     final isRewardedReady = ref.watch(rewardedAdReadyProvider);
+    final reviveTokens = storage.reviveTokens;
+    final hasReviveToken = reviveTokens > 0;
 
     final showReviveButton = !widget.hasRevivedThisRun &&
-        (_reviveReady ||
+      (_reviveReady ||
+        hasReviveToken ||
             isPremium ||
             (adsEnabled && connectivity.isOnline && isRewardedReady));
     final isPremiumRevive = isPremium;
@@ -249,7 +253,9 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
                                         Text(
                                           _reviveReady
                                               ? 'CONTINUE'
-                                              : (isPremiumRevive
+                                              : (hasReviveToken
+                                                  ? 'USE TOKEN TO REVIVE ($reviveTokens)'
+                                                  : isPremiumRevive
                                                   ? 'REVIVE'
                                                   : 'WATCH AD TO REVIVE'),
                                           style: const TextStyle(
@@ -351,6 +357,12 @@ class _DeathScreenState extends ConsumerState<DeathScreen>
 
     // Already watched ad — user is pressing CONTINUE
     if (_reviveReady) {
+      widget.onRevive();
+      return;
+    }
+
+    final storage = ref.read(storageServiceProvider);
+    if (storage.consumeReviveToken()) {
       widget.onRevive();
       return;
     }

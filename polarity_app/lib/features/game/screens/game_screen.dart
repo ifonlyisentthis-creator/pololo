@@ -233,6 +233,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
 
     final isEasyRun = _engine.easyMode;
+    final leaderboard = ref.read(leaderboardServiceProvider);
     final modeBest = isEasyRun
         ? storage.leaderboardBestEasyScore
         : storage.leaderboardBestHardScore;
@@ -242,9 +243,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
       } else {
         storage.setLeaderboardBestHardScore(_engine.score);
       }
-      ref
-          .read(leaderboardServiceProvider)
-          .submitScore(_engine.score, easyMode: isEasyRun);
+      leaderboard.submitModeScore(_engine.score, easyMode: isEasyRun);
+    }
+
+    if (_engine.score > storage.leaderboardBestTotalScore) {
+      storage.setLeaderboardBestTotalScore(_engine.score);
+      leaderboard.submitTotalScore(_engine.score);
+    }
+
+    storage.recordRunForDailyMission(score: _engine.score);
+
+    final completedDailyChallenge = !storage.isDailyChallengeCompleted &&
+        _engine.score >= storage.dailyChallengeTarget;
+    if (completedDailyChallenge) {
+      storage.markDailyChallengeCompleted();
     }
 
     // V2: Persist tier if upgraded — Bug fix 3: consume immediately
