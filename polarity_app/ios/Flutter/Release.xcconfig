@@ -1,1 +1,3 @@
 #include "Generated.xcconfig"
+// Override this in your CI/Xcode release pipeline with a production app ID.
+GAD_APPLICATION_IDENTIFIER=ca-app-pub-3940256099942544~1458002511

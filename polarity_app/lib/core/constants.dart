@@ -72,18 +72,40 @@ class GameConstants {
   static const double iapPrice = 2.99;
   static const String iapProductId = 'remove_ads';
 
-  // AdMob Test IDs (swap with production IDs before release)
-  static const String androidBannerId =
-      'ca-app-pub-3940256099942544/6300978111';
-  static const String iosBannerId = 'ca-app-pub-3940256099942544/2934735716';
-  static const String androidInterstitialId =
-      'ca-app-pub-3940256099942544/1033173712';
-  static const String iosInterstitialId =
-      'ca-app-pub-3940256099942544/4411468910';
-  static const String androidRewardedId =
-      'ca-app-pub-3940256099942544/5224354917';
-  static const String iosRewardedId =
-      'ca-app-pub-3940256099942544/1712485313';
+  // AdMob IDs can be overridden with --dart-define for production.
+  static const String androidAppId = String.fromEnvironment(
+    'ANDROID_ADMOB_APP_ID',
+    defaultValue: 'ca-app-pub-3940256099942544~3347511713',
+  );
+  static const String iosAppId = String.fromEnvironment(
+    'IOS_ADMOB_APP_ID',
+    defaultValue: 'ca-app-pub-3940256099942544~1458002511',
+  );
+
+  static const String androidBannerId = String.fromEnvironment(
+    'ANDROID_BANNER_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/6300978111',
+  );
+  static const String iosBannerId = String.fromEnvironment(
+    'IOS_BANNER_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/2934735716',
+  );
+  static const String androidInterstitialId = String.fromEnvironment(
+    'ANDROID_INTERSTITIAL_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/1033173712',
+  );
+  static const String iosInterstitialId = String.fromEnvironment(
+    'IOS_INTERSTITIAL_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/4411468910',
+  );
+  static const String androidRewardedId = String.fromEnvironment(
+    'ANDROID_REWARDED_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/5224354917',
+  );
+  static const String iosRewardedId = String.fromEnvironment(
+    'IOS_REWARDED_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/1712485313',
+  );
 
   // ── Revive ──
   static const double reviveInvincibilityDuration = 3.0;

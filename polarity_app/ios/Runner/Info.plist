@@ -61,9 +61,9 @@
 		<array>
 			<string>UIInterfaceOrientationPortrait</string>
 		</array>
-		<!-- AdMob App ID — Replace with your production App ID before release -->
+		<!-- AdMob App ID comes from Xcode build setting GAD_APPLICATION_IDENTIFIER -->
 		<key>GADApplicationIdentifier</key>
-		<string>ca-app-pub-3940256099942544~1458002511</string>
+		<string>$(GAD_APPLICATION_IDENTIFIER)</string>
 		<key>SKAdNetworkItems</key>
 		<array>
 			<dict>

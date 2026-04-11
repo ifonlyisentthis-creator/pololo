@@ -26,6 +26,8 @@ import 'package:polarity/core/constants.dart';
 ///     - Rewarded ads are user-initiated only.
 ///     - 70s minimum interval (well above recommended thresholds).
 class AdService {
+  static const String _googleTestPublisherPrefix = 'ca-app-pub-3940256099942544';
+
   bool _initialized = false;
   bool _sdkInitialized = false;
   bool _adsEnabled = true;
@@ -55,6 +57,35 @@ class AdService {
         defaultTargetPlatform == TargetPlatform.iOS;
   }
 
+  bool get _hasProductionAdUnitsForCurrentPlatform {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return !GameConstants.androidAppId.startsWith(
+            _googleTestPublisherPrefix,
+          ) &&
+          !GameConstants.androidInterstitialId.startsWith(
+            _googleTestPublisherPrefix,
+          ) &&
+          !GameConstants.androidRewardedId.startsWith(
+            _googleTestPublisherPrefix,
+          );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return !GameConstants.iosAppId.startsWith(
+            _googleTestPublisherPrefix,
+          ) &&
+          !GameConstants.iosInterstitialId.startsWith(
+            _googleTestPublisherPrefix,
+          ) &&
+          !GameConstants.iosRewardedId.startsWith(
+            _googleTestPublisherPrefix,
+          );
+    }
+    return false;
+  }
+
+  bool get _blockAdsInRelease =>
+      kReleaseMode && !_hasProductionAdUnitsForCurrentPlatform;
+
   // V6: Callback to notify Riverpod when rewarded ad readiness changes
   void Function(bool)? onRewardedReadyChanged;
 
@@ -64,7 +95,7 @@ class AdService {
 
   bool get adsEnabled => _adsEnabled;
   set adsEnabled(bool value) {
-    _adsEnabled = value && _isAdsPlatformSupported;
+    _adsEnabled = value && _isAdsPlatformSupported && !_blockAdsInRelease;
     if (!_adsEnabled) {
       _cancelConsentRetry();
       _disposeLoadedAds();
@@ -90,6 +121,14 @@ class AdService {
     _initialized = true;
 
     if (!_isAdsPlatformSupported) {
+      _adsEnabled = false;
+      _isInterstitialReady = false;
+      _isRewardedReady = false;
+      onRewardedReadyChanged?.call(false);
+      return;
+    }
+
+    if (_blockAdsInRelease) {
       _adsEnabled = false;
       _isInterstitialReady = false;
       _isRewardedReady = false;
