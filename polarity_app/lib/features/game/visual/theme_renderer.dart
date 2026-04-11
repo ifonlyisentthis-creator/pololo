@@ -21,6 +21,8 @@ class ThemeRenderer {
   static final List<Color> _obstacleGradientColors = [Colors.black, Colors.black];
   static final List<Color> _wallGradientColorsLeft = [Colors.black, Colors.black];
   static final List<Color> _wallGradientColorsRight = [Colors.black, Colors.black];
+  static double? _cachedBallGlowBlurRadius;
+  static MaskFilter? _cachedBallGlowBlur;
 
   // ── Ball ─────────────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ class ThemeRenderer {
     final glowR = pr + theme.ballGlowRadius + sin(glowPhase) * 3 * intensity;
     _fxPaint
       ..color = colors.first.withValues(alpha: theme.ballGlowIntensity * intensity)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, theme.ballGlowRadius)
+      ..maskFilter = _ballGlowMaskFilter(theme.ballGlowRadius)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawCircle(Offset.zero, glowR, _fxPaint);
@@ -50,6 +52,14 @@ class ThemeRenderer {
     BallPainters.draw(theme.ballShape, canvas, pr, colors, glowPhase, intensity);
 
     canvas.restore();
+  }
+
+  static MaskFilter _ballGlowMaskFilter(double radius) {
+    if (_cachedBallGlowBlurRadius != radius || _cachedBallGlowBlur == null) {
+      _cachedBallGlowBlurRadius = radius;
+      _cachedBallGlowBlur = MaskFilter.blur(BlurStyle.normal, radius);
+    }
+    return _cachedBallGlowBlur!;
   }
 
   static void _applyBallEffect(
@@ -175,11 +185,6 @@ class ThemeRenderer {
     _obstacleGradientColors[0] = effectivePrimary;
     _obstacleGradientColors[1] = effectiveSecondary;
 
-    final sinTime3 = sin(gameTime * 3.0);
-    final glowRadiusScale = 0.5 + sinTime3.abs() * 0.15;
-    final tipBlur = MaskFilter.blur(BlurStyle.normal, 6 + sinTime3 * 6);
-    final pulseScale = 1.0 + sin(gameTime * 5.0) * 0.3;
-
     for (int i = 0; i < obstacles.length; i++) {
       final obs = obstacles[i];
       final double worldY = obs.worldY;
@@ -203,7 +208,6 @@ class ThemeRenderer {
               topLeft: Radius.circular(halfT),
               bottomLeft: Radius.circular(halfT));
 
-      final tipX = fromLeft ? obsWidth : size.width - obsWidth;
       final gradStart = fromLeft
           ? Offset(obsWidth, worldY)
           : Offset(size.width - obsWidth, worldY);
@@ -217,13 +221,6 @@ class ThemeRenderer {
         ..style = PaintingStyle.fill
         ..maskFilter = null;
       canvas.drawRRect(rrect, _fillPaint);
-
-      // Tip glow based on obstacle style.
-      _drawObstacleTip(canvas, theme.obstacleStyle, tipX, worldY,
-          halfT, effectivePrimary, theme.obstacleGlowIntensity, gameTime,
-          glowRadiusScale: glowRadiusScale,
-          pulseScale: pulseScale,
-          tipBlur: tipBlur);
     }
   }
 
@@ -241,78 +238,6 @@ class ThemeRenderer {
 
     final t = ((channelDistance - 0.62) / 0.38).clamp(0.0, 1.0) * 0.45;
     return Color.lerp(color, fgColor, t) ?? color;
-  }
-
-  static void _drawObstacleTip(Canvas canvas, ObstacleStyle style,
-      double tipX, double tipY, double halfT, Color color, double intensity,
-      double gameTime, {
-      required double glowRadiusScale,
-      required double pulseScale,
-      required MaskFilter tipBlur,
-  }) {
-    final glowAlpha =
-        (0.15 + sin(gameTime * 4 + tipY * 0.02).abs() * 0.3) * intensity;
-    final effectiveGlowAlpha = glowAlpha.clamp(0.04, 1.0);
-    final glowR = halfT * glowRadiusScale;
-
-    switch (style) {
-      case ObstacleStyle.solid:
-      case ObstacleStyle.glow:
-        _drawTipGlow(canvas, tipX, tipY, glowR, color, effectiveGlowAlpha,
-            tipBlur);
-      case ObstacleStyle.pulse:
-        _drawTipGlow(canvas, tipX, tipY, glowR * pulseScale, color,
-            effectiveGlowAlpha * 0.8, tipBlur);
-      case ObstacleStyle.flame:
-        for (int i = 0; i < 3; i++) {
-          final offset = sin(gameTime * 8 + i * 1.5) * 3;
-          final h = halfT * (1.0 + sin(gameTime * 6 + i) * 0.3);
-          _drawTipGlow(
-            canvas,
-            tipX + offset,
-            tipY - h * 0.5 * i,
-            3.0,
-            color,
-            effectiveGlowAlpha * (1.0 - i * 0.3),
-            tipBlur,
-          );
-        }
-      case ObstacleStyle.frost:
-        _drawTipGlow(
-            canvas, tipX, tipY, glowR * 0.8, color, effectiveGlowAlpha, tipBlur);
-      case ObstacleStyle.electric:
-        final sparkAlpha = (sin(gameTime * 12 + tipY) > 0.5)
-            ? effectiveGlowAlpha * 1.5
-            : effectiveGlowAlpha * 0.3;
-        _drawTipGlow(canvas, tipX, tipY, glowR * 0.6, color,
-            sparkAlpha.clamp(0.0, 1.0), tipBlur);
-      case ObstacleStyle.stripe:
-        _drawTipGlow(
-            canvas, tipX, tipY, glowR, color, effectiveGlowAlpha * 0.6, tipBlur);
-      case ObstacleStyle.cracked:
-        _drawTipGlow(canvas, tipX, tipY, glowR * 1.2, color,
-            effectiveGlowAlpha * 0.5, tipBlur);
-      case ObstacleStyle.shadow:
-        _drawTipGlow(canvas, tipX, tipY, glowR * 1.5, color,
-            effectiveGlowAlpha * 0.4, tipBlur);
-    }
-  }
-
-  static void _drawTipGlow(
-    Canvas canvas,
-    double cx,
-    double cy,
-    double r,
-    Color color,
-    double alpha,
-    MaskFilter tipBlur,
-  ) {
-    _fxPaint
-      ..color = color.withValues(alpha: alpha)
-      ..maskFilter = tipBlur
-      ..style = PaintingStyle.fill
-      ..shader = null;
-    canvas.drawCircle(Offset(cx, cy), r, _fxPaint);
   }
 
   // ── Magnet effect ────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:polarity/core/constants.dart';
+
+typedef ServerReceiptValidator = Future<bool> Function(PurchaseDetails purchase);
 
 /// In-App Purchase service with receipt validation structure.
 class IapService {
@@ -13,12 +13,27 @@ class IapService {
   bool isPremium = false;
   Function(bool)? onPurchaseUpdated;
 
+  // Secure-by-default: entitlement is granted only when a server validator
+  // confirms the purchase token/receipt.
+  bool requireServerVerification = true;
+  ServerReceiptValidator? serverReceiptValidator;
+
+  bool get isServerVerificationConfigured => serverReceiptValidator != null;
+
+  void configureServerVerification(
+    ServerReceiptValidator validator, {
+    bool enforce = true,
+  }) {
+    serverReceiptValidator = validator;
+    requireServerVerification = enforce;
+  }
+
   Future<void> init() async {
     _available = await _iap.isAvailable();
     if (!_available) return;
 
     _subscription = _iap.purchaseStream.listen(
-      _onPurchaseUpdate,
+      (purchases) => unawaited(_onPurchaseUpdate(purchases)),
       onDone: () => _subscription?.cancel(),
       onError: (_) {},
     );
@@ -27,50 +42,64 @@ class IapService {
     await _iap.restorePurchases();
   }
 
-  void _onPurchaseUpdate(List<PurchaseDetails> purchases) {
+  Future<void> _onPurchaseUpdate(List<PurchaseDetails> purchases) async {
     for (final purchase in purchases) {
-      if (purchase.productID == GameConstants.iapProductId) {
-        if (purchase.status == PurchaseStatus.purchased ||
-            purchase.status == PurchaseStatus.restored) {
-          // Validate receipt
-          if (_validateReceipt(purchase)) {
+      if (purchase.productID != GameConstants.iapProductId) continue;
+
+      switch (purchase.status) {
+        case PurchaseStatus.purchased:
+        case PurchaseStatus.restored:
+          if (await _verifyPurchase(purchase)) {
             isPremium = true;
             onPurchaseUpdated?.call(true);
           }
-        }
-        if (purchase.pendingCompletePurchase) {
-          _iap.completePurchase(purchase);
-        }
+          break;
+        case PurchaseStatus.pending:
+        case PurchaseStatus.canceled:
+        case PurchaseStatus.error:
+          break;
+      }
+
+      if (purchase.pendingCompletePurchase) {
+        await _iap.completePurchase(purchase);
       }
     }
   }
 
-  /// Basic receipt validation using HMAC.
-  /// In production, validate server-side with Google/Apple APIs.
-  bool _validateReceipt(PurchaseDetails purchase) {
-    try {
-      final receiptData = purchase.verificationData.serverVerificationData;
-      if (receiptData.isEmpty) return false;
+  Future<bool> _verifyPurchase(PurchaseDetails purchase) async {
+    if (!_validateReceipt(purchase)) return false;
+    if (!requireServerVerification) return true;
 
-      // Structure for server-side validation
-      // For now, accept if we have valid verification data
-      final hash = _hashReceipt(receiptData);
-      return hash.isNotEmpty;
+    final validator = serverReceiptValidator;
+    if (validator == null) return false;
+
+    try {
+      return await validator(
+        purchase,
+      ).timeout(const Duration(seconds: 10), onTimeout: () => false);
     } catch (_) {
       return false;
     }
   }
 
-  String _hashReceipt(String receiptData) {
-    const secret = 'polarity_iap_validation_key';
-    final key = utf8.encode(secret);
-    final bytes = utf8.encode(receiptData);
-    final hmacSha256 = Hmac(sha256, key);
-    return hmacSha256.convert(bytes).toString();
+  /// Local structural check only.
+  /// In production, validate server-side with Google/Apple APIs.
+  bool _validateReceipt(PurchaseDetails purchase) {
+    try {
+      final verification = purchase.verificationData;
+      if (verification.serverVerificationData.isEmpty) return false;
+      if (verification.source.isEmpty) return false;
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> buyRemoveAds() async {
     if (!_available) return false;
+    if (requireServerVerification && serverReceiptValidator == null) {
+      return false;
+    }
 
     try {
       final response = await _iap.queryProductDetails({GameConstants.iapProductId});

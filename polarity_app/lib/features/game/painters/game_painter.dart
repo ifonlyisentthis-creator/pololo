@@ -103,10 +103,6 @@ class GamePainter extends CustomPainter {
     }
 
     _drawAmbientParticles(canvas, size, theme);
-    // V3: Draw themed walls before obstacles
-    if (theme != null) {
-      ThemeRenderer.drawWalls(canvas, size, theme, engine.gameTime);
-    }
     _drawObstacles(canvas, size, theme);
     _drawTrailParticles(canvas, size, theme);
     _drawMagnetParticles(canvas, size);
@@ -207,18 +203,6 @@ class GamePainter extends CustomPainter {
       _shaderP.maskFilter = null;
       _shaderP.style = PaintingStyle.fill;
       canvas.drawRRect(rrect, _shaderP);
-
-      // Pulsing accent glow at exposed tip (no GPU blur — double-draw fake glow)
-      final tipX = obs.fromLeft ? rect.right : rect.left;
-      final pulsePhase = engine.gameTime * 4.0 + obs.worldY * 0.02;
-      final glowAlpha = (0.25 + 0.15 * sin(pulsePhase)).clamp(0.0, 1.0);
-      final glowRadius = halfT * (0.5 + 0.15 * sin(pulsePhase));
-      // Outer soft glow
-      _glowPaint.color = visibleAccent.withValues(alpha: glowAlpha * 0.25);
-      canvas.drawCircle(Offset(tipX, obs.worldY), glowRadius * 2.5, _glowPaint);
-      // Core
-      _fillPaint.color = visibleAccent.withValues(alpha: glowAlpha);
-      canvas.drawCircle(Offset(tipX, obs.worldY), glowRadius, _fillPaint);
     }
   }
 
@@ -886,23 +870,8 @@ class GamePainter extends CustomPainter {
 
   // ── Near High Score Edge Glow (simplified — no gradient shader) ──
   void _drawNearHighScoreEdge(Canvas canvas, Size size) {
-    if (!engine.isNearHighScore) return;
-    final accent = visibleAccent;
-    final pulse = (sin(engine.gameTime * 4) + 1) / 2;
-    final baseAlpha = engine.isInRecordTerritory ? 0.25 : 0.12;
-    final alpha = baseAlpha + pulse * (engine.isInRecordTerritory ? 0.15 : 0.08);
-    final edgeWidth = engine.isInRecordTerritory ? 12.0 : 6.0;
-    _fillPaint.color = accent.withValues(alpha: alpha * 0.6);
-    // Left edge
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, edgeWidth, size.height),
-      _fillPaint,
-    );
-    // Right edge
-    canvas.drawRect(
-      Rect.fromLTWH(size.width - edgeWidth, 0, edgeWidth, size.height),
-      _fillPaint,
-    );
+    // Disabled to keep side walls visually clean during progression.
+    return;
   }
 
   // ── Shield Visual ──

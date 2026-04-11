@@ -22,12 +22,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
   Duration _lastTime = Duration.zero;
   double _accumulator = 0;
   late GameEngine _engine;
+  late GamePainter _gamePainter;
   late AudioService _audio;
   late HapticService _haptics;
   int _lastScore = -1;
   int _lastPhase = -1;
-  bool _deathScreenShown = false;
+  bool _deathFlowStarted = false;
+  bool _deathScreenVisible = false;
   int _lastTutorialBucket = -1;
+  bool _cachedPainterIsDark = true;
 
   // Fixed-step simulation gives stable physics and smoother pacing under load.
   static const double _fixedTimeStep = 1.0 / 120.0;
@@ -44,6 +47,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _engine = ref.read(gameEngineProvider);
     _audio = ref.read(audioServiceProvider);
     _haptics = ref.read(hapticServiceProvider);
+    _cachedPainterIsDark = ref.read(isDarkThemeProvider);
+    _gamePainter = GamePainter(
+      engine: _engine,
+      isDarkTheme: _cachedPainterIsDark,
+      repaint: _repaintNotifier,
+    );
 
     _ticker = createTicker(_onTick);
     _ticker.start();
@@ -119,8 +128,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
       rebuildHud = true;
     }
 
-    if (_engine.state == GameState.dead && !_deathScreenShown) {
-      _deathScreenShown = true;
+    if (_engine.state == GameState.dead && !_deathFlowStarted) {
+      _deathFlowStarted = true;
       _onDeath();
     }
 
@@ -239,9 +248,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
         },
         onAdClosed: () {
           if (mounted) {
-            _ticker.muted = false;
             _lastTime = Duration.zero;
             _accumulator = 0;
+            if (!_deathScreenVisible) {
+              _ticker.muted = false;
+            }
           }
         },
       );
@@ -254,6 +265,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _showDeathScreen({bool tierUp = false}) {
+    _deathScreenVisible = true;
+    // Death screen is opaque; pause hidden route updates until user restarts/revives.
+    _ticker.muted = true;
     final deathMessage = _engine.getDeathMessage();
     final isPraise = _engine.lastMessageWasPraise;
     Navigator.of(context).push(
@@ -283,7 +297,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _restart() {
     Navigator.of(context).pop();
-    _deathScreenShown = false;
+    _deathFlowStarted = false;
+    _deathScreenVisible = false;
+    _ticker.muted = false;
     _lastScore = -1;
     _lastPhase = -1;
 
@@ -299,7 +315,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _revive() {
     Navigator.of(context).pop();
-    _deathScreenShown = false;
+    _deathFlowStarted = false;
+    _deathScreenVisible = false;
+    _ticker.muted = false;
     _audio.play('revive');
     _engine.revive();
     _lastTime = Duration.zero;
@@ -318,9 +336,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkThemeProvider);
+    if (_cachedPainterIsDark != isDark) {
+      _cachedPainterIsDark = isDark;
+      _gamePainter = GamePainter(
+        engine: _engine,
+        isDarkTheme: isDark,
+        repaint: _repaintNotifier,
+      );
+    }
     final inverted = _engine.isPhase5Inverted;
-    final effectiveBg =
-        inverted ? Colors.white : (isDark ? Colors.black : Colors.white);
+    final effectiveBg = inverted
+        ? Colors.white
+        : (isDark ? Colors.black : Colors.white);
 
     return PopScope(
       canPop: false,
@@ -359,11 +386,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 Positioned.fill(
                   child: RepaintBoundary(
                     child: CustomPaint(
-                      painter: GamePainter(
-                        engine: _engine,
-                        isDarkTheme: isDark,
-                        repaint: _repaintNotifier,
-                      ),
+                      painter: _gamePainter,
                       isComplex: true,
                       willChange: true,
                       size: Size.infinite,
@@ -372,9 +395,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 ),
                 // HUD overlay — only rebuilds on setState (score/phase changes)
                 Positioned.fill(
-                  child: RepaintBoundary(
-                    child: _buildHUD(isDark),
-                  ),
+                  child: RepaintBoundary(child: _buildHUD(isDark)),
                 ),
                 // Debug invincibility button (debug builds only)
                 if (kDebugMode)
@@ -417,8 +438,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   Widget _buildHUD(bool isDark) {
     final inverted = _engine.isPhase5Inverted;
-    final fgColor =
-        inverted ? Colors.black : (isDark ? Colors.white : Colors.black);
+    final fgColor = inverted
+        ? Colors.black
+        : (isDark ? Colors.white : Colors.black);
     final topPad = MediaQuery.of(context).padding.top;
     final bottomPad = MediaQuery.of(context).padding.bottom;
 
@@ -490,6 +512,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _showPauseDialog() {
+    // Pause menu overlays the game; freeze simulation/repaint until resume.
+    _ticker.muted = true;
     final isDark = ref.read(isDarkThemeProvider);
     final bgColor = isDark ? Colors.black : Colors.white;
     final fgColor = isDark ? Colors.white : Colors.black;
@@ -505,6 +529,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
             // Back button on pause dialog → resume the game
             Navigator.of(ctx).pop();
             _engine.resume();
+            _ticker.muted = false;
+            _lastTime = Duration.zero;
+            _accumulator = 0;
           }
         },
         child: Center(
@@ -527,10 +554,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _engine.resume();
+                  _ticker.muted = false;
+                  _lastTime = Duration.zero;
+                  _accumulator = 0;
                 },
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 16,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: fgColor.withValues(alpha: 0.3)),
                     borderRadius: BorderRadius.circular(4),
@@ -551,6 +583,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               const SizedBox(height: 20),
               GestureDetector(
                 onTap: () {
+                  _ticker.muted = false;
                   Navigator.of(ctx).pop();
                   Navigator.of(context).pop();
                 },

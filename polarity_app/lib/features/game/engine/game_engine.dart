@@ -22,14 +22,14 @@ class GameEngine {
   final List<Particle> trailParticles = [];
 
   GameState state = GameState.menu;
-  GameState _stateBeforePause = GameState.playing; // V5: for pause from countdown
+  GameState _stateBeforePause =
+      GameState.playing; // V5: for pause from countdown
   bool isTouching = false;
 
   int score = 0;
   int highScore = 0;
   int currentPhase = 0;
   Color accentColor = GameConstants.phaseColors[0];
-  Color _targetAccentColor = GameConstants.phaseColors[0];
 
   double screenWidth = 0;
   double screenHeight = 0;
@@ -39,7 +39,9 @@ class GameEngine {
 
   // Obstacle spawning
   bool _nextFromLeft = true;
+  int _consecutiveSameSide = 0;
   double _nextObstacleSpawnY = 0;
+  double _previousSpacingMultiplier = 1.0;
 
   // Revive
   int countdownValue = 3;
@@ -143,7 +145,8 @@ class GameEngine {
 
   // ── V3: Visual Theme System ──
   VisualTheme? activeTheme;
-  VisualTheme? _invertedThemeCache; // Cached inverted theme — avoids per-frame allocation
+  VisualTheme?
+  _invertedThemeCache; // Cached inverted theme — avoids per-frame allocation
   int currentThemeTier = 0;
   bool themeJustActivated = false;
   double themeTransitionTimer = 0;
@@ -167,6 +170,38 @@ class GameEngine {
   final Random _rng = Random();
 
   static const double playerYFraction = 0.3;
+  static const double _runtimeFixedStep = 1.0 / 120.0;
+  static final double _fixedVelocityDrag = pow(
+    0.56,
+    _runtimeFixedStep,
+  ).toDouble();
+  static final double _fixedParticleVelocityDamping = pow(
+    0.3,
+    _runtimeFixedStep,
+  ).toDouble();
+  static final double _fixedParticleRadiusDamping = pow(
+    0.75,
+    _runtimeFixedStep,
+  ).toDouble();
+  static final double _fixedScreenShakeDecay = pow(
+    0.01,
+    _runtimeFixedStep,
+  ).toDouble();
+
+  static bool _isFixedStepDt(double dt) =>
+      (dt - _runtimeFixedStep).abs() < 1e-9;
+
+  static double _velocityDragFactor(double dt) =>
+      _isFixedStepDt(dt) ? _fixedVelocityDrag : pow(0.56, dt).toDouble();
+
+  static (double velocityDamping, double radiusDamping) _particleDampingFactors(
+    double dt,
+  ) => _isFixedStepDt(dt)
+      ? (_fixedParticleVelocityDamping, _fixedParticleRadiusDamping)
+      : (pow(0.3, dt).toDouble(), pow(0.75, dt).toDouble());
+
+  static double _screenShakeDecayFactor(double dt) =>
+      _isFixedStepDt(dt) ? _fixedScreenShakeDecay : pow(0.01, dt).toDouble();
 
   double get _offscreenSpawnStartY =>
       screenHeight + GameConstants.obstacleSpacing * 0.6;
@@ -204,11 +239,12 @@ class GameEngine {
     ScoreGuard.setScore(0);
     currentPhase = 0;
     accentColor = GameConstants.phaseColors[0];
-    _targetAccentColor = GameConstants.phaseColors[0];
     gameTime = 0;
     isInvincible = false;
     invincibilityTimer = 0;
     _nextFromLeft = _rng.nextBool();
+    _consecutiveSameSide = 0;
+    _previousSpacingMultiplier = 1.0;
     hasShield = false;
     _nextShieldScore = GameConstants.firstShieldScore;
     isPhase5Inverted = false;
@@ -304,9 +340,6 @@ class GameEngine {
     trollSystem.onRevive();
     fakeDeathFlashTimer = 0;
 
-    // V5: Recalculate phase 5 inversion
-    isPhase5Inverted = currentPhase >= GameConstants.phaseThresholds.length - 1;
-
     // Reset death VFX
     screenShakeIntensity = 0;
     screenShakeX = 0;
@@ -317,6 +350,7 @@ class GameEngine {
     // Bug fix 9: Remove nearby obstacles that would immediately collide
     final safeZone = GameConstants.obstacleSpacing * 0.5;
     _removeObstaclesNearPlayer(safeZone);
+    _previousSpacingMultiplier = 1.0;
     _resetObstacleSpawnCursor();
   }
 
@@ -365,7 +399,7 @@ class GameEngine {
 
     // Crisp velocity drag for snappy direction switching (frame-rate independent).
     // After 1 second, ~56% velocity remains — fast deceleration for precise control.
-    player.velocityX *= pow(0.56, dt).toDouble();
+    player.velocityX *= _velocityDragFactor(dt);
 
     player.velocityX = player.velocityX.clamp(
       -GameConstants.maxHorizontalSpeed,
@@ -377,8 +411,7 @@ class GameEngine {
     player.y = screenHeight * playerYFraction;
 
     // ── Squash/stretch based on horizontal velocity ──
-    final velRatio =
-        player.velocityX.abs() / GameConstants.maxHorizontalSpeed;
+    final velRatio = player.velocityX.abs() / GameConstants.maxHorizontalSpeed;
     squashStretch = 1.0 + velRatio * 0.30; // max 1.30x stretch
 
     // ── Light trail particles ──
@@ -440,39 +473,18 @@ class GameEngine {
       }
     }
 
-    // ── Color transition (skip when already converged) ──
-    if (accentColor != _targetAccentColor) {
-      accentColor = Color.lerp(accentColor, _targetAccentColor, dt * 3) ??
-          _targetAccentColor;
-    }
-
-    // ── Phase 5 inversion ──
-    isPhase5Inverted =
-        currentPhase >= GameConstants.phaseThresholds.length - 1;
-
     // ── Update particles ──
-    final velocityDamping = pow(0.3, dt).toDouble();
-    final radiusDamping = pow(0.75, dt).toDouble();
+    final (velocityDamping, radiusDamping) = _particleDampingFactors(dt);
     _updateAndCullParticles(
       magnetParticles,
       dt,
       velocityDamping,
       radiusDamping,
     );
-    _updateAndCullParticles(
-      trailParticles,
-      dt,
-      velocityDamping,
-      radiusDamping,
-    );
+    _updateAndCullParticles(trailParticles, dt, velocityDamping, radiusDamping);
 
     // ── Shield break / misc particles (must update during playing too) ──
-    _updateAndCullParticles(
-      particles,
-      dt,
-      velocityDamping,
-      radiusDamping,
-    );
+    _updateAndCullParticles(particles, dt, velocityDamping, radiusDamping);
 
     // ── VFX timers ──
     if (phaseRingTimer > 0) phaseRingTimer -= dt;
@@ -523,14 +535,8 @@ class GameEngine {
     _updateAmbientParticles(dt);
 
     // Fade out any leftover trail/magnet particles
-    final velocityDamping = pow(0.3, dt).toDouble();
-    final radiusDamping = pow(0.75, dt).toDouble();
-    _updateAndCullParticles(
-      trailParticles,
-      dt,
-      velocityDamping,
-      radiusDamping,
-    );
+    final (velocityDamping, radiusDamping) = _particleDampingFactors(dt);
+    _updateAndCullParticles(trailParticles, dt, velocityDamping, radiusDamping);
     _updateAndCullParticles(
       magnetParticles,
       dt,
@@ -540,22 +546,11 @@ class GameEngine {
   }
 
   void _updateDead(double dt) {
-    final velocityDamping = pow(0.3, dt).toDouble();
-    final radiusDamping = pow(0.75, dt).toDouble();
-    _updateAndCullParticles(
-      particles,
-      dt,
-      velocityDamping,
-      radiusDamping,
-    );
+    final (velocityDamping, radiusDamping) = _particleDampingFactors(dt);
+    _updateAndCullParticles(particles, dt, velocityDamping, radiusDamping);
 
     // Fade out leftover trail/magnet particles from last frame of playing
-    _updateAndCullParticles(
-      trailParticles,
-      dt,
-      velocityDamping,
-      radiusDamping,
-    );
+    _updateAndCullParticles(trailParticles, dt, velocityDamping, radiusDamping);
     _updateAndCullParticles(
       magnetParticles,
       dt,
@@ -574,7 +569,7 @@ class GameEngine {
 
   void _decayScreenShake(double dt) {
     if (screenShakeIntensity > 0.5) {
-      screenShakeIntensity *= pow(0.01, dt).toDouble();
+      screenShakeIntensity *= _screenShakeDecayFactor(dt);
       screenShakeX = (_rng.nextDouble() - 0.5) * 2 * screenShakeIntensity;
       screenShakeY = (_rng.nextDouble() - 0.5) * 2 * screenShakeIntensity;
     } else {
@@ -600,20 +595,24 @@ class GameEngine {
     // V3: Use theme ambient color if active
     final ambientColor = activeTheme != null
         ? (activeTheme!.ambientColors.isNotEmpty
-            ? activeTheme!.ambientColors[_rng.nextInt(activeTheme!.ambientColors.length)]
-            : accentColor)
+              ? activeTheme!.ambientColors[_rng.nextInt(
+                  activeTheme!.ambientColors.length,
+                )]
+              : accentColor)
         : accentColor;
-    ambientParticles.add(Particle(
-      x: _rng.nextDouble() * screenWidth,
-      y: randomizeLife
-          ? _rng.nextDouble() * screenHeight
-          : screenHeight + _rng.nextDouble() * 40,
-      velocityX: (_rng.nextDouble() - 0.5) * 16,
-      velocityY: -(15 + _rng.nextDouble() * 20),
-      life: randomizeLife ? _rng.nextDouble() * life : life,
-      radius: 0.5 + _rng.nextDouble() * 1.5,
-      color: ambientColor.withValues(alpha: 0.08),
-    ));
+    ambientParticles.add(
+      Particle(
+        x: _rng.nextDouble() * screenWidth,
+        y: randomizeLife
+            ? _rng.nextDouble() * screenHeight
+            : screenHeight + _rng.nextDouble() * 40,
+        velocityX: (_rng.nextDouble() - 0.5) * 16,
+        velocityY: -(15 + _rng.nextDouble() * 20),
+        life: randomizeLife ? _rng.nextDouble() * life : life,
+        radius: 0.5 + _rng.nextDouble() * 1.5,
+        color: ambientColor.withValues(alpha: 0.08),
+      ),
+    );
   }
 
   void _updateAmbientParticles(double dt) {
@@ -705,12 +704,18 @@ class GameEngine {
   }
 
   void _resetObstacleSpawnCursor() {
+    bool hasObstacle = false;
     _nextObstacleSpawnY = _offscreenSpawnStartY;
     for (int i = 0; i < obstacles.length; i++) {
+      hasObstacle = true;
       final y = obstacles[i].worldY;
       if (y > _nextObstacleSpawnY) {
         _nextObstacleSpawnY = y;
       }
+    }
+    // Cursor stores the *next* spawn position, not the last obstacle position.
+    if (hasObstacle) {
+      _nextObstacleSpawnY += _jitteredSpacing();
     }
   }
 
@@ -735,15 +740,17 @@ class GameEngine {
       for (int i = 0; i < 12; i++) {
         final angle = _rng.nextDouble() * 2 * pi;
         final speed = 100 + _rng.nextDouble() * 100;
-        trailParticles.add(Particle(
-          x: player.x + cos(angle) * GameConstants.playerRadius,
-          y: player.y + sin(angle) * GameConstants.playerRadius,
-          velocityX: cos(angle) * speed,
-          velocityY: sin(angle) * speed,
-          life: 0.3 + _rng.nextDouble() * 0.2,
-          radius: 1.0 + _rng.nextDouble() * 2.0,
-          color: accentColor.withValues(alpha: 0.6),
-        ));
+        trailParticles.add(
+          Particle(
+            x: player.x + cos(angle) * GameConstants.playerRadius,
+            y: player.y + sin(angle) * GameConstants.playerRadius,
+            velocityX: cos(angle) * speed,
+            velocityY: sin(angle) * speed,
+            life: 0.3 + _rng.nextDouble() * 0.2,
+            radius: 1.0 + _rng.nextDouble() * 2.0,
+            color: accentColor.withValues(alpha: 0.6),
+          ),
+        );
       }
     }
   }
@@ -812,15 +819,17 @@ class GameEngine {
       for (int i = 0; i < 16; i++) {
         final angle = (i / 16) * 2 * pi + _rng.nextDouble() * 0.3;
         final speed = 150 + _rng.nextDouble() * 150;
-        particles.add(Particle(
-          x: player.x + cos(angle) * (GameConstants.playerRadius + 14),
-          y: player.y + sin(angle) * (GameConstants.playerRadius + 14),
-          velocityX: cos(angle) * speed,
-          velocityY: sin(angle) * speed,
-          life: 0.4 + _rng.nextDouble() * 0.3,
-          radius: 2.0 + _rng.nextDouble() * 2.0,
-          color: accentColor.withValues(alpha: 0.8),
-        ));
+        particles.add(
+          Particle(
+            x: player.x + cos(angle) * (GameConstants.playerRadius + 14),
+            y: player.y + sin(angle) * (GameConstants.playerRadius + 14),
+            velocityX: cos(angle) * speed,
+            velocityY: sin(angle) * speed,
+            life: 0.4 + _rng.nextDouble() * 0.3,
+            radius: 2.0 + _rng.nextDouble() * 2.0,
+            color: accentColor.withValues(alpha: 0.8),
+          ),
+        );
       }
 
       // Push player to center to prevent instant re-death on wall
@@ -883,7 +892,9 @@ class GameEngine {
       final count = activeTheme!.explosionParticleCount.clamp(0, 120);
       ExplosionSpawner.spawn(
         activeTheme!.explosionPattern,
-        particles, x, y,
+        particles,
+        x,
+        y,
         activeTheme!.explosionColors,
         count,
         activeTheme!.explosionLife,
@@ -902,30 +913,34 @@ class GameEngine {
         final r = sqrt(i.toDouble()) * 8;
         final speed = 60 + _rng.nextDouble() * 400;
         final life = 0.8 + _rng.nextDouble() * 1.5;
-        particles.add(Particle(
-          x: x + cos(angle) * min(r, 20),
-          y: y + sin(angle) * min(r, 20),
-          velocityX: cos(angle) * speed,
-          velocityY: sin(angle) * speed,
-          life: life,
-          radius: 2.0 + _rng.nextDouble() * 8,
-          color: accentColor,
-          gravity: 60.0,
-        ));
+        particles.add(
+          Particle(
+            x: x + cos(angle) * min(r, 20),
+            y: y + sin(angle) * min(r, 20),
+            velocityX: cos(angle) * speed,
+            velocityY: sin(angle) * speed,
+            life: life,
+            radius: 2.0 + _rng.nextDouble() * 8,
+            color: accentColor,
+            gravity: 60.0,
+          ),
+        );
       }
       // Secondary ring burst
       for (int i = 0; i < 24; i++) {
         final angle = (i / 24) * 2 * pi;
-        particles.add(Particle(
-          x: x + cos(angle) * 15,
-          y: y + sin(angle) * 15,
-          velocityX: cos(angle) * 300,
-          velocityY: sin(angle) * 300,
-          life: 0.4 + _rng.nextDouble() * 0.3,
-          radius: 3.0 + _rng.nextDouble() * 3,
-          color: accentColor.withValues(alpha: 0.9),
-          gravity: 0,
-        ));
+        particles.add(
+          Particle(
+            x: x + cos(angle) * 15,
+            y: y + sin(angle) * 15,
+            velocityX: cos(angle) * 300,
+            velocityY: sin(angle) * 300,
+            life: 0.4 + _rng.nextDouble() * 0.3,
+            radius: 3.0 + _rng.nextDouble() * 3,
+            color: accentColor.withValues(alpha: 0.9),
+            gravity: 0,
+          ),
+        );
       }
     } else {
       // Normal death: randomized blast
@@ -937,16 +952,18 @@ class GameEngine {
         final speed = (80 + _rng.nextDouble() * 450) * blastMult;
         final life = 0.5 + _rng.nextDouble() * 1.3;
         final spinOffset = spinBase * (_rng.nextDouble() - 0.5);
-        particles.add(Particle(
-          x: x + (_rng.nextDouble() - 0.5) * 6,
-          y: y + (_rng.nextDouble() - 0.5) * 6,
-          velocityX: cos(angle) * speed + spinOffset,
-          velocityY: sin(angle) * speed + spinOffset * 0.5,
-          life: life,
-          radius: 2.0 + _rng.nextDouble() * 7,
-          color: accentColor,
-          gravity: 80.0,
-        ));
+        particles.add(
+          Particle(
+            x: x + (_rng.nextDouble() - 0.5) * 6,
+            y: y + (_rng.nextDouble() - 0.5) * 6,
+            velocityX: cos(angle) * speed + spinOffset,
+            velocityY: sin(angle) * speed + spinOffset * 0.5,
+            life: life,
+            radius: 2.0 + _rng.nextDouble() * 7,
+            color: accentColor,
+            gravity: 80.0,
+          ),
+        );
       }
     }
   }
@@ -966,15 +983,19 @@ class GameEngine {
       final dir = player.velocityX > 0 ? -1.0 : 1.0;
       final colors = activeTheme!.trailColors;
       final c = colors[_rng.nextInt(colors.length)];
-      trailParticles.add(Particle(
-        x: px + dir * GameConstants.playerRadius * 0.8,
-        y: py + (_rng.nextDouble() - 0.5) * 12,
-        velocityX: dir * (40 + _rng.nextDouble() * 80) * trailLengthSeed,
-        velocityY: (_rng.nextDouble() - 0.5) * 30,
-        life: (0.25 + _rng.nextDouble() * 0.30 * trailLengthSeed) * activeTheme!.trailLife,
-        radius: (1.5 * activeTheme!.trailWidth) + _rng.nextDouble() * 3.0,
-        color: c.withValues(alpha: 0.7),
-      ));
+      trailParticles.add(
+        Particle(
+          x: px + dir * GameConstants.playerRadius * 0.8,
+          y: py + (_rng.nextDouble() - 0.5) * 12,
+          velocityX: dir * (40 + _rng.nextDouble() * 80) * trailLengthSeed,
+          velocityY: (_rng.nextDouble() - 0.5) * 30,
+          life:
+              (0.25 + _rng.nextDouble() * 0.30 * trailLengthSeed) *
+              activeTheme!.trailLife,
+          radius: (1.5 * activeTheme!.trailWidth) + _rng.nextDouble() * 3.0,
+          color: c.withValues(alpha: 0.7),
+        ),
+      );
       return;
     }
 
@@ -987,15 +1008,17 @@ class GameEngine {
     final py = player.y;
     final dir = player.velocityX > 0 ? -1.0 : 1.0;
     final lifeMult = (eliteUnlocked && isInRecordTerritory) ? 1.5 : 1.0;
-    trailParticles.add(Particle(
-      x: px + dir * GameConstants.playerRadius * 0.8,
-      y: py + (_rng.nextDouble() - 0.5) * (eliteUnlocked ? 12 : 8),
-      velocityX: dir * (40 + _rng.nextDouble() * 80) * trailLengthSeed,
-      velocityY: (_rng.nextDouble() - 0.5) * 30,
-      life: (0.25 + _rng.nextDouble() * 0.30 * trailLengthSeed) * lifeMult,
-      radius: (eliteUnlocked ? 2.0 : 1.5) + _rng.nextDouble() * 3.0,
-      color: accentColor.withValues(alpha: eliteUnlocked ? 0.75 : 0.6),
-    ));
+    trailParticles.add(
+      Particle(
+        x: px + dir * GameConstants.playerRadius * 0.8,
+        y: py + (_rng.nextDouble() - 0.5) * (eliteUnlocked ? 12 : 8),
+        velocityX: dir * (40 + _rng.nextDouble() * 80) * trailLengthSeed,
+        velocityY: (_rng.nextDouble() - 0.5) * 30,
+        life: (0.25 + _rng.nextDouble() * 0.30 * trailLengthSeed) * lifeMult,
+        radius: (eliteUnlocked ? 2.0 : 1.5) + _rng.nextDouble() * 3.0,
+        color: accentColor.withValues(alpha: eliteUnlocked ? 0.75 : 0.6),
+      ),
+    );
   }
 
   void _spawnMagnetParticles(double dt) {
@@ -1006,15 +1029,17 @@ class GameEngine {
       final startY = player.y + (_rng.nextDouble() - 0.5) * 80;
       final dx = player.x - startX;
 
-      magnetParticles.add(Particle(
-        x: startX,
-        y: startY,
-        velocityX: dx * (1.5 + _rng.nextDouble()),
-        velocityY: (_rng.nextDouble() - 0.5) * 40,
-        life: 0.35 + _rng.nextDouble() * 0.25,
-        radius: 2.0 + _rng.nextDouble() * 2,
-        color: accentColor.withValues(alpha: 0.7),
-      ));
+      magnetParticles.add(
+        Particle(
+          x: startX,
+          y: startY,
+          velocityX: dx * (1.5 + _rng.nextDouble()),
+          velocityY: (_rng.nextDouble() - 0.5) * 40,
+          life: 0.35 + _rng.nextDouble() * 0.25,
+          radius: 2.0 + _rng.nextDouble() * 2,
+          color: accentColor.withValues(alpha: 0.7),
+        ),
+      );
     }
   }
 
@@ -1022,43 +1047,69 @@ class GameEngine {
     final tipX = obs.fromLeft ? obs.width : screenWidth - obs.width;
     final dir = obs.fromLeft ? 1.0 : -1.0;
     for (int i = 0; i < 5; i++) {
-      trailParticles.add(Particle(
-        x: tipX,
-        y: obs.worldY + (_rng.nextDouble() - 0.5) * obs.thickness,
-        velocityX: dir * (40 + _rng.nextDouble() * 60),
-        velocityY: (_rng.nextDouble() - 0.5) * 50,
-        life: 0.2 + _rng.nextDouble() * 0.15,
-        radius: 1.0 + _rng.nextDouble() * 1.0,
-        color: accentColor.withValues(alpha: 0.4),
-      ));
+      trailParticles.add(
+        Particle(
+          x: tipX,
+          y: obs.worldY + (_rng.nextDouble() - 0.5) * obs.thickness,
+          velocityX: dir * (40 + _rng.nextDouble() * 60),
+          velocityY: (_rng.nextDouble() - 0.5) * 50,
+          life: 0.2 + _rng.nextDouble() * 0.15,
+          radius: 1.0 + _rng.nextDouble() * 1.0,
+          color: accentColor.withValues(alpha: 0.4),
+        ),
+      );
     }
   }
 
   void _generateObstaclesIfNeeded() {
-    // Keep a buffer of obstacles extending ~1.5 screens below
-    final bufferEnd = screenHeight + screenHeight * 0.5;
+    // Keep a buffer of obstacles extending ~1 full screen below the viewport
+    // bottom so there's never a visible gap after the pre-seeded batch.
+    final bufferEnd = screenHeight + screenHeight * 1.0;
     while (_nextObstacleSpawnY < bufferEnd) {
-      _nextObstacleSpawnY += _jitteredSpacing();
       _addObstacle(_nextObstacleSpawnY);
+      _nextObstacleSpawnY += _jitteredSpacing();
     }
   }
 
-  /// Randomised spacing: phase-scaled base ±25% jitter
+  /// Randomised spacing: phase-scaled base with controlled jitter.
   double _jitteredSpacing() {
     final spacingMult = _getSpacingMultiplier();
     final base = GameConstants.obstacleSpacing * spacingMult;
     final jitter = GameConstants.obstacleSpacingJitter;
-    final rMult = 1.0 + (_rng.nextDouble() * 2 - 1) * jitter; // 0.75 – 1.25
+
+    // Triangular noise keeps randomness but naturally reduces extreme outliers.
+    final triangularNoise = (_rng.nextDouble() + _rng.nextDouble() - 1.0);
+    double rMult = 1.0 + triangularNoise * jitter;
+
+    // Prevent two very large gaps in a row to avoid "empty" feeling streaks.
+    const largeGapThreshold = 1.12;
+    if (_previousSpacingMultiplier > largeGapThreshold &&
+        rMult > largeGapThreshold) {
+      rMult = 1.0 + _rng.nextDouble() * (largeGapThreshold - 1.0);
+    }
+
+    _previousSpacingMultiplier = rMult;
     return base * rMult;
   }
 
   void _addObstacle(double worldY) {
-    // Side selection: per-phase same-side repeat chance
-    final sameSideChance = _getSameSideChance();
-    if (_rng.nextDouble() < sameSideChance) {
-      // Keep same side (tension moment)
-    } else {
+    // Side selection: truly random with per-phase same-side cap.
+    // Each obstacle has a 50/50 base coin flip, but consecutive same-side runs
+    // are capped to maintain fairness (lower phases = shorter cap).
+    final maxConsecutive = _getMaxConsecutiveSameSide();
+    final bool wantSameSide = _rng.nextBool();  // true 50% of the time
+
+    if (_consecutiveSameSide >= maxConsecutive) {
+      // Force flip after too many same-side in a row
       _nextFromLeft = !_nextFromLeft;
+      _consecutiveSameSide = 0;
+    } else if (wantSameSide) {
+      // Keep same side
+      _consecutiveSameSide++;
+    } else {
+      // Flip side
+      _nextFromLeft = !_nextFromLeft;
+      _consecutiveSameSide = 0;
     }
     final fromLeft = _nextFromLeft;
 
@@ -1071,21 +1122,23 @@ class GameEngine {
 
     // Ensure gap is always at least 2.2x player diameter for survivability
     final minGap = GameConstants.playerRadius * 4.4;
-    final clampedWidth =
-        width.clamp(screenWidth * 0.22, screenWidth - minGap);
+    final clampedWidth = width.clamp(screenWidth * 0.22, screenWidth - minGap);
 
     // Randomised thickness for visual variety
-    final thickness = GameConstants.obstacleMinThickness +
+    final thickness =
+        GameConstants.obstacleMinThickness +
         _rng.nextDouble() *
             (GameConstants.obstacleMaxThickness -
                 GameConstants.obstacleMinThickness);
 
-    obstacles.add(Obstacle(
-      fromLeft: fromLeft,
-      width: clampedWidth,
-      worldY: worldY,
-      thickness: thickness,
-    ));
+    obstacles.add(
+      Obstacle(
+        fromLeft: fromLeft,
+        width: clampedWidth,
+        worldY: worldY,
+        thickness: thickness,
+      ),
+    );
   }
 
   void _updatePhase() {
@@ -1098,51 +1151,63 @@ class GameEngine {
     }
     if (newPhase != currentPhase) {
       currentPhase = newPhase;
-      _targetAccentColor = GameConstants.phaseColors[
-          currentPhase.clamp(0, GameConstants.phaseColors.length - 1)];
-
-      // Phase transition VFX
+      // Phase ring VFX using current accent color (no color override)
       phaseRingTimer = 0.6;
-      phaseRingColor = _targetAccentColor;
+      phaseRingColor = accentColor;
     }
   }
 
   double _getSpeedMultiplier() {
     final idx = currentPhase.clamp(
-        0, GameConstants.phaseSpeedMultipliers.length - 1);
+      0,
+      GameConstants.phaseSpeedMultipliers.length - 1,
+    );
     return GameConstants.phaseSpeedMultipliers[idx];
   }
 
   double _getMagnetMultiplier() {
     final idx = currentPhase.clamp(
-        0, GameConstants.phaseMagnetMultipliers.length - 1);
+      0,
+      GameConstants.phaseMagnetMultipliers.length - 1,
+    );
     return GameConstants.phaseMagnetMultipliers[idx];
   }
 
   double _getGapFactor() {
-    final idx =
-        currentPhase.clamp(0, GameConstants.phaseGapFactors.length - 1);
+    final idx = currentPhase.clamp(0, GameConstants.phaseGapFactors.length - 1);
     return GameConstants.phaseGapFactors[idx];
   }
 
   double _getSpacingMultiplier() {
     final idx = currentPhase.clamp(
-        0, GameConstants.phaseSpacingMultipliers.length - 1);
+      0,
+      GameConstants.phaseSpacingMultipliers.length - 1,
+    );
     return GameConstants.phaseSpacingMultipliers[idx];
   }
 
-  double _getSameSideChance() {
-    final idx = currentPhase.clamp(
-        0, GameConstants.phaseSameSideChances.length - 1);
-    return GameConstants.phaseSameSideChances[idx];
+  /// Max consecutive same-side obstacles before a forced flip.
+  /// Lower phases = stricter cap to keep it fair, higher phases = allow longer runs.
+  int _getMaxConsecutiveSameSide() {
+    switch (currentPhase) {
+      case 0: return 2;  // Phase 1: max 2 same-side in a row
+      case 1: return 2;  // Phase 2: same
+      case 2: return 3;  // Phase 3: allows longer runs
+      case 3: return 3;  // Phase 4: chaotic
+      default: return 4; // Phase 5: nearly uncapped
+    }
   }
 
   // ── Roast shuffler: Fisher-Yates, no repeats until all shown ──
-  late List<int> _roastDeck = _buildShuffledDeck(GameConstants.deathRoasts.length);
+  late List<int> _roastDeck = _buildShuffledDeck(
+    GameConstants.deathRoasts.length,
+  );
   int _roastCursor = 0;
 
   // ── Praise shuffler: separate deck for praise messages ──
-  late List<int> _praiseDeck = _buildShuffledDeck(GameConstants.deathPraises.length);
+  late List<int> _praiseDeck = _buildShuffledDeck(
+    GameConstants.deathPraises.length,
+  );
   int _praiseCursor = 0;
 
   List<int> _buildShuffledDeck(int size) {
@@ -1217,15 +1282,17 @@ class GameEngine {
       for (int i = 0; i < 20; i++) {
         final angle = _rng.nextDouble() * 2 * pi;
         final speed = 120 + _rng.nextDouble() * 180;
-        trailParticles.add(Particle(
-          x: player.x + cos(angle) * GameConstants.playerRadius,
-          y: player.y + sin(angle) * GameConstants.playerRadius,
-          velocityX: cos(angle) * speed,
-          velocityY: sin(angle) * speed,
-          life: 0.5 + _rng.nextDouble() * 0.4,
-          radius: 2.0 + _rng.nextDouble() * 3.0,
-          color: const Color(0xFFFFD700).withValues(alpha: 0.8),
-        ));
+        trailParticles.add(
+          Particle(
+            x: player.x + cos(angle) * GameConstants.playerRadius,
+            y: player.y + sin(angle) * GameConstants.playerRadius,
+            velocityX: cos(angle) * speed,
+            velocityY: sin(angle) * speed,
+            life: 0.5 + _rng.nextDouble() * 0.4,
+            radius: 2.0 + _rng.nextDouble() * 3.0,
+            color: const Color(0xFFFFD700).withValues(alpha: 0.8),
+          ),
+        );
       }
     }
   }
@@ -1236,24 +1303,24 @@ class GameEngine {
       if (score == ms && ms > _lastMilestoneTriggered) {
         _lastMilestoneTriggered = ms;
         milestoneGlowTimer = 0.6;
-        milestoneGlowColor = ms >= 200
-            ? const Color(0xFFFFD700)
-            : accentColor;
+        milestoneGlowColor = ms >= 200 ? const Color(0xFFFFD700) : accentColor;
 
         // Sparkle burst proportional to milestone
         final count = ms >= 100 ? 15 : 8;
         for (int i = 0; i < count; i++) {
           final angle = _rng.nextDouble() * 2 * pi;
           final speed = 80 + _rng.nextDouble() * 120;
-          trailParticles.add(Particle(
-            x: player.x + cos(angle) * GameConstants.playerRadius * 1.5,
-            y: player.y + sin(angle) * GameConstants.playerRadius * 1.5,
-            velocityX: cos(angle) * speed,
-            velocityY: sin(angle) * speed,
-            life: 0.3 + _rng.nextDouble() * 0.2,
-            radius: 1.0 + _rng.nextDouble() * 2.0,
-            color: milestoneGlowColor.withValues(alpha: 0.6),
-          ));
+          trailParticles.add(
+            Particle(
+              x: player.x + cos(angle) * GameConstants.playerRadius * 1.5,
+              y: player.y + sin(angle) * GameConstants.playerRadius * 1.5,
+              velocityX: cos(angle) * speed,
+              velocityY: sin(angle) * speed,
+              life: 0.3 + _rng.nextDouble() * 0.2,
+              radius: 1.0 + _rng.nextDouble() * 2.0,
+              color: milestoneGlowColor.withValues(alpha: 0.6),
+            ),
+          );
         }
         break; // Only trigger highest milestone
       }
@@ -1270,8 +1337,10 @@ class GameEngine {
 
       // Advance rotation for next game at this tier
       if (newTier <= 5) {
-        themeRotationIndices[newTier] =
-            ThemeRegistry.advanceRotation(newTier, themeRotationIndices[newTier] ?? 0);
+        themeRotationIndices[newTier] = ThemeRegistry.advanceRotation(
+          newTier,
+          themeRotationIndices[newTier] ?? 0,
+        );
       }
 
       themeJustActivated = true;
@@ -1283,17 +1352,21 @@ class GameEngine {
       for (int i = 0; i < 20; i++) {
         final angle = _rng.nextDouble() * 2 * pi;
         final speed = 100 + _rng.nextDouble() * 200;
-        trailParticles.add(Particle(
-          x: player.x + cos(angle) * GameConstants.playerRadius,
-          y: player.y + sin(angle) * GameConstants.playerRadius,
-          velocityX: cos(angle) * speed,
-          velocityY: sin(angle) * speed,
-          life: 0.5 + _rng.nextDouble() * 0.4,
-          radius: 2.0 + _rng.nextDouble() * 3.0,
-          color: burstColor.withValues(alpha: 0.8),
-        ));
+        trailParticles.add(
+          Particle(
+            x: player.x + cos(angle) * GameConstants.playerRadius,
+            y: player.y + sin(angle) * GameConstants.playerRadius,
+            velocityX: cos(angle) * speed,
+            velocityY: sin(angle) * speed,
+            life: 0.5 + _rng.nextDouble() * 0.4,
+            radius: 2.0 + _rng.nextDouble() * 3.0,
+            color: burstColor.withValues(alpha: 0.8),
+          ),
+        );
       }
-    } else if (newTier == currentThemeTier && score >= 500 && activeTheme != null) {
+    } else if (newTier == currentThemeTier &&
+        score >= 500 &&
+        activeTheme != null) {
       // Post-500 DFA: check if we crossed a 50-point boundary for new combo
       final prevSeed = ((score - 1) ~/ 50);
       final currSeed = (score ~/ 50);
@@ -1327,7 +1400,9 @@ class GameEngine {
 
   /// Serialize theme rotation indices to JSON string for storage.
   String serializeThemeRotations() {
-    return jsonEncode(themeRotationIndices.map((k, v) => MapEntry(k.toString(), v)));
+    return jsonEncode(
+      themeRotationIndices.map((k, v) => MapEntry(k.toString(), v)),
+    );
   }
 
   /// Deserialize theme rotation indices from JSON string.
@@ -1335,7 +1410,9 @@ class GameEngine {
     if (json.isEmpty) return;
     try {
       final map = jsonDecode(json) as Map<String, dynamic>;
-      themeRotationIndices = map.map((k, v) => MapEntry(int.parse(k), v as int));
+      themeRotationIndices = map.map(
+        (k, v) => MapEntry(int.parse(k), v as int),
+      );
     } catch (_) {
       // If parsing fails, use defaults
     }

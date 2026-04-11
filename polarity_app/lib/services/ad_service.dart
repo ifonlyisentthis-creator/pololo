@@ -27,7 +27,12 @@ import 'package:polarity/core/constants.dart';
 ///     - 70s minimum interval (well above recommended thresholds).
 class AdService {
   bool _initialized = false;
+  bool _sdkInitialized = false;
   bool _adsEnabled = true;
+  bool _consentRefreshInFlight = false;
+
+  static const Duration _consentRetryDelay = Duration(seconds: 45);
+  Timer? _consentRetryTimer;
 
   InterstitialAd? _interstitialAd;
   RewardedAd? _rewardedAd;
@@ -61,13 +66,10 @@ class AdService {
   set adsEnabled(bool value) {
     _adsEnabled = value && _isAdsPlatformSupported;
     if (!_adsEnabled) {
-      _interstitialAd?.dispose();
-      _interstitialAd = null;
-      _isInterstitialReady = false;
-      _rewardedAd?.dispose();
-      _rewardedAd = null;
-      _isRewardedReady = false;
-      onRewardedReadyChanged?.call(false);
+      _cancelConsentRetry();
+      _disposeLoadedAds();
+    } else if (_initialized) {
+      _kickAdRecovery();
     }
   }
 
@@ -98,18 +100,84 @@ class AdService {
     // Start monotonic session clock immediately
     _sessionClock.start();
 
+    await _refreshConsentAndInitializeAds(scheduleRetryOnFail: true);
+  }
+
+  void _kickAdRecovery() {
+    if (!_initialized || !_adsEnabled || !_isAdsPlatformSupported) return;
+    unawaited(_refreshConsentAndInitializeAds(scheduleRetryOnFail: true));
+  }
+
+  void _cancelConsentRetry() {
+    _consentRetryTimer?.cancel();
+    _consentRetryTimer = null;
+  }
+
+  void _scheduleConsentRetry() {
+    if (_consentRetryTimer != null || !_adsEnabled || !_isAdsPlatformSupported) {
+      return;
+    }
+    _consentRetryTimer = Timer(_consentRetryDelay, () {
+      _consentRetryTimer = null;
+      if (!_initialized || !_adsEnabled || !_isAdsPlatformSupported) return;
+      unawaited(_refreshConsentAndInitializeAds(scheduleRetryOnFail: true));
+    });
+  }
+
+  void _disposeLoadedAds() {
+    _interstitialAd?.dispose();
+    _interstitialAd = null;
+    _isInterstitialReady = false;
+    _rewardedAd?.dispose();
+    _rewardedAd = null;
+    _isRewardedReady = false;
+    _interstitialOnScreen = false;
+    _onInterstitialOpened = null;
+    _onInterstitialClosed = null;
+    onRewardedReadyChanged?.call(false);
+  }
+
+  Future<void> _refreshConsentAndInitializeAds({
+    required bool scheduleRetryOnFail,
+  }) async {
+    if (!_initialized || !_adsEnabled || !_isAdsPlatformSupported) return;
+    if (_consentRefreshInFlight) return;
+
+    _consentRefreshInFlight = true;
     try {
       // Await consent BEFORE initializing ad SDK (GDPR/UMP compliance).
       // Timeout after 5s so consent issues don't block the app forever.
       await _requestConsent().timeout(
         const Duration(seconds: 5),
-        onTimeout: () {}, // proceed if consent hangs
+        onTimeout: () {},
       );
-      await MobileAds.instance.initialize();
-      _preloadInterstitial();
-      _preloadRewarded();
+
+      // Strictly gate ad loading on UMP state to avoid requesting ads before
+      // consent is actually eligible for ad requests.
+      final canRequestAds = await _canRequestAds();
+      if (!canRequestAds || !_adsEnabled) {
+        _disposeLoadedAds();
+        if (scheduleRetryOnFail) _scheduleConsentRetry();
+        return;
+      }
+
+      _cancelConsentRetry();
+
+      if (!_sdkInitialized) {
+        await MobileAds.instance.initialize();
+        _sdkInitialized = true;
+      }
+
+      if (_interstitialAd == null && !_isInterstitialReady) {
+        _preloadInterstitial();
+      }
+      if (_rewardedAd == null && !_isRewardedReady) {
+        _preloadRewarded();
+      }
     } catch (_) {
-      // Ad init failure is non-fatal
+      if (scheduleRetryOnFail) _scheduleConsentRetry();
+    } finally {
+      _consentRefreshInFlight = false;
     }
   }
 
@@ -155,6 +223,14 @@ class AdService {
     }
 
     return completer.future;
+  }
+
+  Future<bool> _canRequestAds() async {
+    try {
+      return await ConsentInformation.instance.canRequestAds();
+    } catch (_) {
+      return false;
+    }
   }
 
   void _preloadInterstitial() {
@@ -267,6 +343,10 @@ class AdService {
   }) async {
     if (!_adsEnabled || !_isAdsPlatformSupported) return false;
 
+    if (_interstitialAd == null || !_isInterstitialReady) {
+      _kickAdRecovery();
+    }
+
     // Bail if an ad is already on screen
     if (_interstitialOnScreen) return false;
 
@@ -328,6 +408,10 @@ class AdService {
     required Function onRewarded,
     VoidCallback? onDismissed,
   }) async {
+    if (_rewardedAd == null || !_isRewardedReady) {
+      _kickAdRecovery();
+    }
+
     if (!_adsEnabled ||
         !_isAdsPlatformSupported ||
         !_isRewardedReady ||
@@ -367,8 +451,8 @@ class AdService {
   }
 
   void dispose() {
+    _cancelConsentRetry();
     _sessionClock.stop();
-    _interstitialAd?.dispose();
-    _rewardedAd?.dispose();
+    _disposeLoadedAds();
   }
 }

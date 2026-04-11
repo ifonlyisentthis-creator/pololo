@@ -13,6 +13,10 @@ class SettingsScreen extends ConsumerWidget {
     final hapticsOn = ref.watch(hapticsEnabledProvider);
     final audioOn = ref.watch(audioEnabledProvider);
     final adsOn = ref.watch(adsEnabledProvider);
+    final iapService = ref.read(iapServiceProvider);
+    final canStartPurchase =
+      !iapService.requireServerVerification ||
+      iapService.isServerVerificationConfigured;
     final rememberTheme = ref.watch(rememberThemeAcrossLaunchesProvider);
     final bgColor = isDark ? Colors.black : Colors.white;
     final fgColor = isDark ? Colors.white : Colors.black;
@@ -165,12 +169,35 @@ class SettingsScreen extends ConsumerWidget {
                         GestureDetector(
                           onTap: () async {
                             ref.read(hapticServiceProvider).selectionClick();
-                            final iap = ref.read(iapServiceProvider);
+                            if (!canStartPurchase) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Purchases temporarily unavailable.',
+                                    style: TextStyle(fontFamily: 'monospace'),
+                                  ),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                              return;
+                            }
+
                             // Just launch the purchase flow.
                             // Actual ad-disable happens via the IAP purchase
                             // stream listener (in main.dart) only after payment
                             // is confirmed by the store.
-                            await iap.buyRemoveAds();
+                            final launched = await iapService.buyRemoveAds();
+                            if (!launched && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Purchase could not be started.',
+                                    style: TextStyle(fontFamily: 'monospace'),
+                                  ),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 20),
@@ -193,13 +220,17 @@ class SettingsScreen extends ConsumerWidget {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        '\$${GameConstants.iapPrice.toStringAsFixed(2)}',
+                                        canStartPurchase
+                                            ? '\$${GameConstants.iapPrice.toStringAsFixed(2)}'
+                                            : 'TEMPORARILY UNAVAILABLE',
                                         style: TextStyle(
                                           fontFamily: 'monospace',
                                           fontSize: 12,
                                           fontWeight: FontWeight.w300,
-                                          color:
-                                              fgColor.withValues(alpha: 0.4),
+                                          color: canStartPurchase
+                                              ? fgColor.withValues(alpha: 0.4)
+                                              : const Color(0xFFFF9F0A)
+                                                    .withValues(alpha: 0.8),
                                           letterSpacing: 1,
                                         ),
                                       ),

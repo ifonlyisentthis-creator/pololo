@@ -42,21 +42,39 @@ Future<void> main() async {
     container.read(connectivityServiceProvider).init(),
   ]);
 
-  // Initialize monetization services (non-blocking, errors caught)
-  container.read(adServiceProvider).init().catchError((_) {});
-  container.read(iapServiceProvider).init().catchError((_) {});
-  container.read(leaderboardServiceProvider).init().catchError((_) {});
+  final storage = container.read(storageServiceProvider);
+  final adService = container.read(adServiceProvider);
+  final iapService = container.read(iapServiceProvider);
 
-  // V6: Wire ad readiness callback to Riverpod provider
-  container.read(adServiceProvider).onRewardedReadyChanged = (ready) {
+  // Apply persisted ad setting before ad init to avoid loading ads for premium users.
+  adService.adsEnabled = storage.adsEnabled;
+
+  // Wire rewarded readiness callback before ad init to avoid missing first ready event.
+  adService.onRewardedReadyChanged = (ready) {
     container.read(rewardedAdReadyProvider.notifier).state = ready;
   };
+  container.read(rewardedAdReadyProvider.notifier).state =
+      adService.isRewardedReady;
+
+  // IAP callback must be wired before IAP init/restore to avoid missing early
+  // restored purchase events and accidentally leaving ads enabled.
+  iapService.onPurchaseUpdated = (isPremium) {
+    if (isPremium) {
+      adService.adsEnabled = false;
+      storage.setAdsEnabled(false);
+      // Sync Riverpod state so death screen hides revive button immediately.
+      container.read(adsEnabledProvider.notifier).state = false;
+    }
+  };
+
+  // Initialize monetization services (non-blocking, errors caught)
+  adService.init().catchError((_) {});
+  iapService.init().catchError((_) {});
+  container.read(leaderboardServiceProvider).init().catchError((_) {});
 
   // Apply persisted settings to services
-  final storage = container.read(storageServiceProvider);
   container.read(audioServiceProvider).enabled = storage.audioEnabled;
   container.read(hapticServiceProvider).enabled = storage.hapticsEnabled;
-  container.read(adServiceProvider).adsEnabled = storage.adsEnabled;
 
   // Load high score and difficulty into engine
   final engine = container.read(gameEngineProvider);
@@ -83,16 +101,6 @@ Future<void> main() async {
 
   // Update day streak
   storage.updateStreak();
-
-  // IAP callback: if premium purchased, disable ads everywhere immediately
-  container.read(iapServiceProvider).onPurchaseUpdated = (isPremium) {
-    if (isPremium) {
-      container.read(adServiceProvider).adsEnabled = false;
-      container.read(storageServiceProvider).setAdsEnabled(false);
-      // Sync Riverpod state so death screen hides revive button immediately
-      container.read(adsEnabledProvider.notifier).state = false;
-    }
-  };
 
   runApp(
     UncontrolledProviderScope(

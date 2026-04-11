@@ -12,7 +12,7 @@ class GameConstants {
   static const double obstacleMinThickness = 14.0;
   static const double obstacleMaxThickness = 22.0;
   static const double obstacleSpacing = 200.0;
-  static const double obstacleSpacingJitter = 0.25; // ±25% random variance
+  static const double obstacleSpacingJitter = 0.20; // ±20% random variance
   static const double baseScrollSpeed = 220.0;
 
   // Per-phase obstacle spacing multiplier (lower = denser = harder)
@@ -24,14 +24,8 @@ class GameConstants {
     0.64, // Phase 5: god-tier density
   ];
 
-  // Per-phase same-side repeat chance (higher = more unpredictable)
-  static const List<double> phaseSameSideChances = [
-    0.12, // Phase 1: mostly alternating
-    0.20, // Phase 2: occasional surprise
-    0.28, // Phase 3: keeps you guessing
-    0.34, // Phase 4: chaotic
-    0.40, // Phase 5: maximum chaos
-  ];
+  // Per-phase max consecutive same-side obstacles (enforced in game_engine)
+  // Phase 1-2: 2, Phase 3-4: 3, Phase 5: 4
 
   // ── Safe spawn delay (seconds before first obstacle) ──
   static const double safeSpawnDelay = 0.8;

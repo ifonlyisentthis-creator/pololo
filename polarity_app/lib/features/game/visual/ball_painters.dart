@@ -19,11 +19,40 @@ class BallPainters {
   static final Paint _specP = Paint();
   static final Paint _extraP = Paint();
 
+  // Cached MaskFilter instances by quantized blur radius — avoids per-frame
+  // allocation for shapes whose blur radius is effectively constant.
+  static final Map<double, MaskFilter> _blurCache = <double, MaskFilter>{};
+
+  static MaskFilter _cachedBlur(double radius) {
+    final key = (radius * 100).roundToDouble() / 100;
+    return _blurCache.putIfAbsent(
+      key,
+      () => MaskFilter.blur(BlurStyle.normal, key),
+    );
+  }
+
   static const List<int> _branchDirections = <int>[-1, 1];
   static const List<double> _leafVeinOffsets = <double>[-0.35, 0.0, 0.35];
 
-  static void draw(BallShape shape, Canvas canvas, double radius,
-      List<Color> colors, double glowPhase, double intensity) {
+  static void _resetStrokeCaps() {
+    // Shared Paint instances are reused across shapes, so restore default
+    // stroke caps before each draw to avoid stale round caps leaking.
+    _fillP.strokeCap = StrokeCap.butt;
+    _strokeP.strokeCap = StrokeCap.butt;
+    _glowP.strokeCap = StrokeCap.butt;
+    _specP.strokeCap = StrokeCap.butt;
+    _extraP.strokeCap = StrokeCap.butt;
+  }
+
+  static void draw(
+    BallShape shape,
+    Canvas canvas,
+    double radius,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
+    _resetStrokeCaps();
     switch (shape) {
       case BallShape.circle:
         _drawCircle(canvas, radius, colors, glowPhase, intensity);
@@ -80,7 +109,10 @@ class BallPainters {
       colors[index.clamp(0, colors.length - 1)];
 
   static Path _getCachedPath(
-      int shapeKey, double radius, void Function(Path path) builder) {
+    int shapeKey,
+    double radius,
+    void Function(Path path) builder,
+  ) {
     Map<double, Path>? perRadius = _cachedPaths[shapeKey];
     final cached = perRadius?[radius];
     if (cached != null) {
@@ -101,8 +133,12 @@ class BallPainters {
     return path;
   }
 
-  static void _buildRegularPolygonPath(Path path, int sides, double r,
-      {double rotation = -pi / 2}) {
+  static void _buildRegularPolygonPath(
+    Path path,
+    int sides,
+    double r, {
+    double rotation = -pi / 2,
+  }) {
     path.reset();
     final step = 2 * pi / sides;
     for (var i = 0; i < sides; i++) {
@@ -120,14 +156,19 @@ class BallPainters {
 
   // ─── 1. Circle ─────────────────────────────────────────────────────────
 
-  static void _drawCircle(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawCircle(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Outer glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.35 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.5)
+      ..maskFilter = _cachedBlur(r * 0.5)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawCircle(Offset.zero, r * 1.15, _glowP);
@@ -154,10 +195,14 @@ class BallPainters {
 
   // ─── 2. Hexagon ────────────────────────────────────────────────────────
 
-  static void _drawHexagon(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
-    final path =
-      _getCachedPath(1, r, (p) => _buildRegularPolygonPath(p, 6, r));
+  static void _drawHexagon(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
+    final path = _getCachedPath(1, r, (p) => _buildRegularPolygonPath(p, 6, r));
 
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
@@ -184,16 +229,20 @@ class BallPainters {
 
   // ─── 3. Star5 ──────────────────────────────────────────────────────────
 
-  static void _drawStar5(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawStar5(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
-    final path =
-      _getCachedPath(2, r, (p) => _buildStarPath(p, 5, r, r * 0.4));
+    final path = _getCachedPath(2, r, (p) => _buildStarPath(p, 5, r, r * 0.4));
 
     // Glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35)
+      ..maskFilter = _cachedBlur(r * 0.35)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawPath(path, _glowP);
@@ -219,7 +268,11 @@ class BallPainters {
   }
 
   static void _buildStarPath(
-      Path path, int points, double outerR, double innerR) {
+    Path path,
+    int points,
+    double outerR,
+    double innerR,
+  ) {
     path.reset();
     final step = pi / points;
     for (var i = 0; i < points * 2; i++) {
@@ -238,8 +291,13 @@ class BallPainters {
 
   // ─── 4. Star6 ──────────────────────────────────────────────────────────
 
-  static void _drawStar6(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawStar6(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
     final path = _getCachedPath(3, r, (p) {
@@ -273,10 +331,14 @@ class BallPainters {
 
   // ─── 5. Pentagon ───────────────────────────────────────────────────────
 
-  static void _drawPentagon(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
-    final path =
-      _getCachedPath(4, r, (p) => _buildRegularPolygonPath(p, 5, r));
+  static void _drawPentagon(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
+    final path = _getCachedPath(4, r, (p) => _buildRegularPolygonPath(p, 5, r));
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
     // Fill
@@ -302,8 +364,13 @@ class BallPainters {
 
   // ─── 6. Diamond ────────────────────────────────────────────────────────
 
-  static void _drawDiamond(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawDiamond(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     final path = _getCachedPath(5, r, (p) {
       p
@@ -346,8 +413,13 @@ class BallPainters {
 
   // ─── 7. Gear ───────────────────────────────────────────────────────────
 
-  static void _drawGear(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawGear(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final path = _getCachedPath(6, r, (p) {
       const teeth = 8;
@@ -405,24 +477,32 @@ class BallPainters {
 
   // ─── 8. Crescent ───────────────────────────────────────────────────────
 
-  static void _drawCrescent(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawCrescent(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
 
     final path = _getCachedPath(7, r, (p) {
       final mainCircle = Path()
         ..addOval(Rect.fromCircle(center: Offset.zero, radius: r));
       final subtracted = Path()
-        ..addOval(Rect.fromCircle(center: Offset(r * 0.5, 0), radius: r * 0.85));
+        ..addOval(
+          Rect.fromCircle(center: Offset(r * 0.5, 0), radius: r * 0.85),
+        );
       p.addPath(
-          Path.combine(PathOperation.difference, mainCircle, subtracted),
-          Offset.zero);
+        Path.combine(PathOperation.difference, mainCircle, subtracted),
+        Offset.zero,
+      );
     });
 
     // Outer glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.4)
+      ..maskFilter = _cachedBlur(r * 0.4)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawPath(path, _glowP);
@@ -451,8 +531,13 @@ class BallPainters {
 
   // ─── 9. Crown ──────────────────────────────────────────────────────────
 
-  static void _drawCrown(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawCrown(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final w = r * 1.1;
     final h = r * 1.2;
@@ -503,8 +588,13 @@ class BallPainters {
 
   // ─── 10. Cross ─────────────────────────────────────────────────────────
 
-  static void _drawCross(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawCross(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final a = r * 0.3; // half arm width
     final path = _getCachedPath(9, r, (p) {
@@ -547,8 +637,13 @@ class BallPainters {
 
   // ─── 11. Cube ──────────────────────────────────────────────────────────
 
-  static void _drawCube(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawCube(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final s = r * 0.75; // half edge
     final base = _safeColor(colors, 0);
@@ -615,8 +710,13 @@ class BallPainters {
 
   // ─── 12. Spiral ────────────────────────────────────────────────────────
 
-  static void _drawSpiral(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawSpiral(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     final path = _pathA..reset();
     const totalAngle = 4 * pi;
@@ -640,7 +740,7 @@ class BallPainters {
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.22
       ..color = _safeColor(colors, 0).withValues(alpha: 0.2 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15)
+      ..maskFilter = _cachedBlur(r * 0.15)
       ..strokeCap = StrokeCap.round
       ..shader = null;
     canvas.drawPath(path, _glowP);
@@ -660,8 +760,13 @@ class BallPainters {
 
   // ─── 13. Eye ───────────────────────────────────────────────────────────
 
-  static void _drawEye(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawEye(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final w = r * 1.3;
     final h = r * 0.75;
@@ -678,7 +783,7 @@ class BallPainters {
     // Outer glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.25 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35)
+      ..maskFilter = _cachedBlur(r * 0.35)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawPath(eyePath, _glowP);
@@ -725,8 +830,13 @@ class BallPainters {
 
   // ─── 14. Snowflake ─────────────────────────────────────────────────────
 
-  static void _drawSnowflake(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawSnowflake(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Main arm stroke
@@ -744,7 +854,7 @@ class BallPainters {
       ..strokeWidth = r * 0.18
       ..strokeCap = StrokeCap.round
       ..color = _safeColor(colors, 0).withValues(alpha: 0.25 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12)
+      ..maskFilter = _cachedBlur(r * 0.12)
       ..shader = null;
 
     for (var i = 0; i < 6; i++) {
@@ -760,7 +870,8 @@ class BallPainters {
       final branchLen = r * 0.3;
       for (final dir in _branchDirections) {
         final branchAngle = angle + dir * pi / 3;
-        final branchTip = branchBase +
+        final branchTip =
+            branchBase +
             Offset(branchLen * cos(branchAngle), branchLen * sin(branchAngle));
         canvas.drawLine(branchBase, branchTip, _strokeP);
       }
@@ -777,8 +888,13 @@ class BallPainters {
 
   // ─── 15. Bolt ──────────────────────────────────────────────────────────
 
-  static void _drawBolt(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawBolt(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     final path = _getCachedPath(14, r, (p) {
       p
@@ -794,19 +910,21 @@ class BallPainters {
     // Outer glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.35 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.4)
+      ..maskFilter = _cachedBlur(r * 0.4)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawPath(path, _glowP);
 
     // Fill
     _fillP
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
-      ).createShader(
-          Rect.fromCenter(center: Offset.zero, width: r * 2, height: r * 2.4))
+      ..shader =
+          LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_safeColor(colors, 0), _safeColor(colors, 1)],
+          ).createShader(
+            Rect.fromCenter(center: Offset.zero, width: r * 2, height: r * 2.4),
+          )
       ..color = const Color(0xFFFFFFFF)
       ..maskFilter = null
       ..style = PaintingStyle.fill;
@@ -824,11 +942,19 @@ class BallPainters {
 
   // ─── 16. Prism ─────────────────────────────────────────────────────────
 
-  static void _drawPrism(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawPrism(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
-    final path =
-      _getCachedPath(15, r, (p) => _buildRegularPolygonPath(p, 3, r));
+    final path = _getCachedPath(
+      15,
+      r,
+      (p) => _buildRegularPolygonPath(p, 3, r),
+    );
 
     // Fill
     _fillP
@@ -862,8 +988,13 @@ class BallPainters {
 
   // ─── 17. Leaf ──────────────────────────────────────────────────────────
 
-  static void _drawLeaf(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawLeaf(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.85 + 0.15 * sin(glowPhase);
     final path = _getCachedPath(16, r, (p) {
       p
@@ -899,8 +1030,16 @@ class BallPainters {
     _extraP.strokeWidth = 0.6;
     _extraP.color = Colors.white.withValues(alpha: 0.2 * glow);
     for (final dy in _leafVeinOffsets) {
-      canvas.drawLine(Offset(0, r * dy), Offset(r * 0.4, r * (dy - 0.2)), _extraP);
-      canvas.drawLine(Offset(0, r * dy), Offset(-r * 0.4, r * (dy - 0.2)), _extraP);
+      canvas.drawLine(
+        Offset(0, r * dy),
+        Offset(r * 0.4, r * (dy - 0.2)),
+        _extraP,
+      );
+      canvas.drawLine(
+        Offset(0, r * dy),
+        Offset(-r * 0.4, r * (dy - 0.2)),
+        _extraP,
+      );
     }
 
     // Outline stroke
@@ -915,14 +1054,19 @@ class BallPainters {
 
   // ─── 18. Ring ──────────────────────────────────────────────────────────
 
-  static void _drawRing(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawRing(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Inner faint glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.15 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.4)
+      ..maskFilter = _cachedBlur(r * 0.4)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawCircle(Offset.zero, r * 0.7, _glowP);
@@ -932,7 +1076,7 @@ class BallPainters {
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.25
       ..color = _safeColor(colors, 0).withValues(alpha: 0.2 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.15)
+      ..maskFilter = _cachedBlur(r * 0.15)
       ..shader = null;
     canvas.drawCircle(Offset.zero, r, _specP);
 
@@ -955,8 +1099,13 @@ class BallPainters {
 
   // ─── 19. Slit ──────────────────────────────────────────────────────────
 
-  static void _drawSlit(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawSlit(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     final w = r * 1.1;
     final h = r * 0.175;
@@ -968,22 +1117,24 @@ class BallPainters {
     // Soft outer glow
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.35)
+      ..maskFilter = _cachedBlur(r * 0.35)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawRRect(rrect, _glowP);
 
     // Main fill with linear gradient
     _fillP
-      ..shader = LinearGradient(
-        colors: [
-          _safeColor(colors, 1).withValues(alpha: 0.4),
-          _safeColor(colors, 0),
-          _safeColor(colors, 1).withValues(alpha: 0.4),
-        ],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(
-          Rect.fromCenter(center: Offset.zero, width: w * 2, height: h * 2))
+      ..shader =
+          LinearGradient(
+            colors: [
+              _safeColor(colors, 1).withValues(alpha: 0.4),
+              _safeColor(colors, 0),
+              _safeColor(colors, 1).withValues(alpha: 0.4),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ).createShader(
+            Rect.fromCenter(center: Offset.zero, width: w * 2, height: h * 2),
+          )
       ..color = const Color(0xFFFFFFFF)
       ..maskFilter = null
       ..style = PaintingStyle.fill;
@@ -1000,14 +1151,19 @@ class BallPainters {
 
   // ─── 20. Singularity ──────────────────────────────────────────────────
 
-  static void _drawSingularity(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawSingularity(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Outer aura
     _glowP
       ..color = _safeColor(colors, 0).withValues(alpha: 0.3 * intensity * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.55)
+      ..maskFilter = _cachedBlur(r * 0.55)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawCircle(Offset.zero, r * 1.1, _glowP);
@@ -1017,7 +1173,7 @@ class BallPainters {
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.12
       ..color = _safeColor(colors, 0).withValues(alpha: 0.35 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1)
+      ..maskFilter = _cachedBlur(r * 0.1)
       ..shader = null;
     canvas.drawCircle(Offset.zero, r * 0.75, _specP);
 
@@ -1048,8 +1204,13 @@ class BallPainters {
 
   // ─── 21. Double Ring ───────────────────────────────────────────────────
 
-  static void _drawDoubleRing(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawDoubleRing(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
 
     // Outer ring glow
@@ -1057,7 +1218,7 @@ class BallPainters {
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.18
       ..color = _safeColor(colors, 0).withValues(alpha: 0.18 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.12)
+      ..maskFilter = _cachedBlur(r * 0.12)
       ..shader = null;
     canvas.drawCircle(Offset.zero, r, _glowP);
 
@@ -1075,7 +1236,7 @@ class BallPainters {
       ..style = PaintingStyle.stroke
       ..strokeWidth = r * 0.12
       ..color = _safeColor(colors, 1).withValues(alpha: 0.15 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.08)
+      ..maskFilter = _cachedBlur(r * 0.08)
       ..shader = null;
     canvas.drawCircle(Offset.zero, r * 0.6, _specP);
 
@@ -1099,8 +1260,13 @@ class BallPainters {
 
   // ─── 22. Helix ─────────────────────────────────────────────────────────
 
-  static void _drawHelix(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawHelix(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     const steps = 30;
     final path1 = _pathA..reset();
@@ -1133,7 +1299,7 @@ class BallPainters {
       ..strokeWidth = r * 0.16
       ..strokeCap = StrokeCap.round
       ..color = _safeColor(colors, 0).withValues(alpha: 0.2 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1)
+      ..maskFilter = _cachedBlur(r * 0.1)
       ..shader = null;
     canvas.drawPath(path1, _glowP);
 
@@ -1153,7 +1319,7 @@ class BallPainters {
       ..strokeWidth = r * 0.16
       ..strokeCap = StrokeCap.round
       ..color = _safeColor(colors, 1).withValues(alpha: 0.15 * glow)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.1)
+      ..maskFilter = _cachedBlur(r * 0.1)
       ..shader = null;
     canvas.drawPath(path2, _specP);
 
@@ -1170,8 +1336,13 @@ class BallPainters {
 
   // ─── 23. Tesseract ─────────────────────────────────────────────────────
 
-  static void _drawTesseract(Canvas canvas, double r, List<Color> colors,
-      double glowPhase, double intensity) {
+  static void _drawTesseract(
+    Canvas canvas,
+    double r,
+    List<Color> colors,
+    double glowPhase,
+    double intensity,
+  ) {
     final glow = 0.8 + 0.2 * sin(glowPhase);
     final outer = r * 0.95;
     final inner = r * 0.5;
@@ -1197,14 +1368,22 @@ class BallPainters {
       Offset(inner * cosP - inner * sinP, inner * sinP + (-inner) * cosP),
       Offset(inner * cosP - (-inner) * sinP, inner * sinP + inner * cosP),
       Offset(-inner * cosP - (-inner) * sinP, -inner * sinP + inner * cosP),
-      Offset(-inner * 0.6 * cosP - inner * 0.6 * sinP,
-          -inner * 0.6 * sinP + (-inner * 0.6) * cosP),
-      Offset(inner * 0.6 * cosP - inner * 0.6 * sinP,
-          inner * 0.6 * sinP + (-inner * 0.6) * cosP),
-      Offset(inner * 0.6 * cosP - (-inner * 0.6) * sinP,
-          inner * 0.6 * sinP + inner * 0.6 * cosP),
-      Offset(-inner * 0.6 * cosP - (-inner * 0.6) * sinP,
-          -inner * 0.6 * sinP + inner * 0.6 * cosP),
+      Offset(
+        -inner * 0.6 * cosP - inner * 0.6 * sinP,
+        -inner * 0.6 * sinP + (-inner * 0.6) * cosP,
+      ),
+      Offset(
+        inner * 0.6 * cosP - inner * 0.6 * sinP,
+        inner * 0.6 * sinP + (-inner * 0.6) * cosP,
+      ),
+      Offset(
+        inner * 0.6 * cosP - (-inner * 0.6) * sinP,
+        inner * 0.6 * sinP + inner * 0.6 * cosP,
+      ),
+      Offset(
+        -inner * 0.6 * cosP - (-inner * 0.6) * sinP,
+        -inner * 0.6 * sinP + inner * 0.6 * cosP,
+      ),
     ];
 
     // Outer cube edges
