@@ -119,10 +119,10 @@ class GamePainter extends CustomPainter {
     _drawPhaseTransition(canvas, size);
     _drawMilestoneGlow(canvas, size);
     _drawEliteUnlockFlash(canvas, size);
-    // V3: Theme transition VFX
-    if (engine.activeTheme != null && engine.themeTransitionTimer > 0) {
+        // V3: Theme transition VFX
+        if (theme != null && engine.themeTransitionTimer > 0) {
       ThemeRenderer.drawThemeTransition(canvas, size, engine.player.x,
-          engine.player.y, engine.themeTransitionTimer, engine.activeTheme!);
+          engine.player.y, engine.themeTransitionTimer, theme);
     }
     _drawShockwave(canvas, size);
     _drawDeathParticles(canvas, size, theme);

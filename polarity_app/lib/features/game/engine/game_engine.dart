@@ -147,20 +147,47 @@ class GameEngine {
   VisualTheme? activeTheme;
   VisualTheme?
   _invertedThemeCache; // Cached inverted theme — avoids per-frame allocation
+  VisualTheme?
+  _whiteSurfaceThemeCache; // Cached white-mode adjusted theme
+  bool _useWhiteSurfaceThemeInversion = false;
   int currentThemeTier = 0;
   bool themeJustActivated = false;
   double themeTransitionTimer = 0;
   Map<int, int> themeRotationIndices = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
 
-  /// Returns the effective theme for rendering (inverted if Phase 5).
-  VisualTheme? get effectiveTheme {
-    if (activeTheme == null) return null;
-    return isPhase5Inverted ? _invertedThemeCache : activeTheme;
+  bool get useWhiteSurfaceThemeInversion => _useWhiteSurfaceThemeInversion;
+  set useWhiteSurfaceThemeInversion(bool value) {
+    if (_useWhiteSurfaceThemeInversion == value) return;
+    _useWhiteSurfaceThemeInversion = value;
+    _rebuildThemeCaches();
   }
 
-  /// Rebuild the inverted theme cache (called after restoring theme from storage).
-  void rebuildInvertedCache() {
+  /// Returns the effective theme for rendering.
+  ///
+  /// Priority:
+  /// 1) Phase 5 inversion (always white background mode)
+  /// 2) User-selected white mode inversion for readability
+  /// 3) Raw active theme
+  VisualTheme? get effectiveTheme {
+    if (activeTheme == null) return null;
+    if (isPhase5Inverted) {
+      return _invertedThemeCache ?? activeTheme!.withInversion();
+    }
+    if (_useWhiteSurfaceThemeInversion) {
+      return _whiteSurfaceThemeCache ?? activeTheme!.withInversion();
+    }
+    return activeTheme;
+  }
+
+  void _rebuildThemeCaches() {
     _invertedThemeCache = activeTheme?.withInversion();
+    _whiteSurfaceThemeCache =
+        _useWhiteSurfaceThemeInversion ? activeTheme?.withInversion() : null;
+  }
+
+  /// Rebuild theme caches (called after restoring theme from storage).
+  void rebuildInvertedCache() {
+    _rebuildThemeCaches();
   }
 
   // ── V4: Troll System ──
@@ -592,11 +619,12 @@ class GameEngine {
 
   void _spawnOneAmbientParticle({bool randomizeLife = false}) {
     final life = 4.0 + _rng.nextDouble() * 4.0;
-    // V3: Use theme ambient color if active
-    final ambientColor = activeTheme != null
-        ? (activeTheme!.ambientColors.isNotEmpty
-              ? activeTheme!.ambientColors[_rng.nextInt(
-                  activeTheme!.ambientColors.length,
+    // V3: Use effective theme ambient color if active.
+    final theme = effectiveTheme;
+    final ambientColor = theme != null
+        ? (theme.ambientColors.isNotEmpty
+              ? theme.ambientColors[_rng.nextInt(
+                  theme.ambientColors.length,
                 )]
               : accentColor)
         : accentColor;
@@ -886,19 +914,20 @@ class GameEngine {
   void _spawnExplosion(double x, double y) {
     particles.clear();
 
-    // V3: Use themed explosion if theme is active
-    if (activeTheme != null) {
+    // V3: Use effective themed explosion if theme is active
+    final theme = effectiveTheme;
+    if (theme != null) {
       // Cap explosion particles for performance (max 120)
-      final count = activeTheme!.explosionParticleCount.clamp(0, 120);
+      final count = theme.explosionParticleCount.clamp(0, 120);
       ExplosionSpawner.spawn(
-        activeTheme!.explosionPattern,
+        theme.explosionPattern,
         particles,
         x,
         y,
-        activeTheme!.explosionColors,
+        theme.explosionColors,
         count,
-        activeTheme!.explosionLife,
-        activeTheme!.explosionGravity,
+        theme.explosionLife,
+        theme.explosionGravity,
         _rng,
       );
       return;
@@ -971,17 +1000,18 @@ class GameEngine {
   void _spawnTrailParticles(double dt) {
     if (player.velocityX.abs() < 50) return;
 
-    // V3: Themed trails
-    if (activeTheme != null) {
-      final cap = (80 * activeTheme!.trailDensity).clamp(0, 200);
+    // V3: Effective themed trails
+    final theme = effectiveTheme;
+    if (theme != null) {
+      final cap = (80 * theme.trailDensity).clamp(0, 200);
       if (trailParticles.length >= cap) return;
-      final spawnRate = 55.0 * activeTheme!.trailDensity;
+      final spawnRate = 55.0 * theme.trailDensity;
       if (_rng.nextDouble() > dt * spawnRate * trailScatterSeed) return;
 
       final px = player.x;
       final py = player.y;
       final dir = player.velocityX > 0 ? -1.0 : 1.0;
-      final colors = activeTheme!.trailColors;
+      final colors = theme.trailColors;
       final c = colors[_rng.nextInt(colors.length)];
       trailParticles.add(
         Particle(
@@ -991,8 +1021,8 @@ class GameEngine {
           velocityY: (_rng.nextDouble() - 0.5) * 30,
           life:
               (0.25 + _rng.nextDouble() * 0.30 * trailLengthSeed) *
-              activeTheme!.trailLife,
-          radius: (1.5 * activeTheme!.trailWidth) + _rng.nextDouble() * 3.0,
+              theme.trailLife,
+          radius: (1.5 * theme.trailWidth) + _rng.nextDouble() * 3.0,
           color: c.withValues(alpha: 0.7),
         ),
       );
@@ -1333,7 +1363,7 @@ class GameEngine {
     if (newTier > currentThemeTier) {
       currentThemeTier = newTier;
       activeTheme = ThemeRegistry.selectTheme(score, themeRotationIndices);
-      _invertedThemeCache = activeTheme?.withInversion();
+      _rebuildThemeCaches();
 
       // Advance rotation for next game at this tier
       if (newTier <= 5) {
@@ -1348,7 +1378,8 @@ class GameEngine {
       screenShakeIntensity = 4.0;
 
       // Theme activation celebration burst
-      final burstColor = activeTheme!.ballColors.first;
+      final burstColor =
+          effectiveTheme?.ballColors.first ?? activeTheme!.ballColors.first;
       for (int i = 0; i < 20; i++) {
         final angle = _rng.nextDouble() * 2 * pi;
         final speed = 100 + _rng.nextDouble() * 200;
@@ -1372,7 +1403,7 @@ class GameEngine {
       final currSeed = (score ~/ 50);
       if (currSeed > prevSeed && currSeed > 10) {
         activeTheme = ThemeRegistry.selectTheme(score, themeRotationIndices);
-        _invertedThemeCache = activeTheme?.withInversion();
+        _rebuildThemeCaches();
         themeJustActivated = true;
         themeTransitionTimer = 1.0;
         screenShakeIntensity = 3.0;

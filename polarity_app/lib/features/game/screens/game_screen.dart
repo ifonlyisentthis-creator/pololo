@@ -48,6 +48,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _audio = ref.read(audioServiceProvider);
     _haptics = ref.read(hapticServiceProvider);
     _cachedPainterIsDark = ref.read(isDarkThemeProvider);
+    _engine.useWhiteSurfaceThemeInversion = !_cachedPainterIsDark;
     _gamePainter = GamePainter(
       engine: _engine,
       isDarkTheme: _cachedPainterIsDark,
@@ -336,6 +337,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkThemeProvider);
+    _engine.useWhiteSurfaceThemeInversion = !isDark;
     if (_cachedPainterIsDark != isDark) {
       _cachedPainterIsDark = isDark;
       _gamePainter = GamePainter(
