@@ -6,7 +6,6 @@ import 'package:polarity/features/game/screens/game_screen.dart';
 import 'package:polarity/features/settings/screens/settings_screen.dart';
 import 'package:polarity/core/constants.dart';
 import 'package:polarity/providers/providers.dart';
-import 'package:polarity/services/leaderboard_service.dart';
 
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -61,12 +60,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
     final highScore = storage.getHighScore();
     final currentTier = ref.watch(milestoneTierProvider);
     final streak = storage.streakCount;
-    final reviveTokens = storage.reviveTokens;
-    final dailyChallengeTarget = storage.dailyChallengeTarget;
-    final dailyChallengeDone = storage.isDailyChallengeCompleted;
-    final missionDone = storage.isDailyMissionCompleted;
-    final missionFailed = storage.isDailyMissionFailed;
-    final missionPassesLeft = storage.dailyMissionPassesRemaining;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -154,45 +147,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                             ),
                           ),
                         ],
-                        const SizedBox(height: 8),
-                        Text(
-                          'TOKENS: $reviveTokens',
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
-                            color: const Color(0xFF30D158).withValues(alpha: 0.7),
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          dailyChallengeDone
-                              ? 'DAILY CHALLENGE COMPLETE'
-                              : 'DAILY CHALLENGE: SCORE $dailyChallengeTarget',
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w300,
-                            color: fgColor.withValues(alpha: 0.45),
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          missionDone
-                              ? 'MISSION COMPLETE'
-                              : missionFailed
-                                  ? 'MISSION FAILED - BACK TOMORROW'
-                                  : 'MISSION: SCORE $dailyChallengeTarget IN $missionPassesLeft PASSES',
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w300,
-                            color: fgColor.withValues(alpha: 0.38),
-                            letterSpacing: 1.5,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -249,26 +203,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                                 ref
                                     .read(hapticServiceProvider)
                                     .selectionClick();
-
-                                final selectedView = await _pickLeaderboardView(
-                                  fgColor: fgColor,
-                                  bgColor: bgColor,
-                                );
-                                if (selectedView == null) {
-                                  if (mounted) {
-                                    _navActionInProgress = false;
-                                  }
-                                  return;
-                                }
-
-                                storage.setLeaderboardPreferredView(
-                                  _encodeLeaderboardView(selectedView),
-                                );
-
                                 await ref
                                     .read(leaderboardServiceProvider)
                                     .showLeaderboard(
-                                      view: selectedView,
+                                      easyMode: ref.read(easyModeProvider),
                                     );
                                 if (mounted) {
                                   _navActionInProgress = false;
@@ -345,117 +283,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
         _navActionInProgress = false;
       }
     });
-  }
-
-  LeaderboardView _decodeLeaderboardView(int raw) {
-    switch (raw) {
-      case 1:
-        return LeaderboardView.hard;
-      case 2:
-        return LeaderboardView.easy;
-      default:
-        return LeaderboardView.total;
-    }
-  }
-
-  int _encodeLeaderboardView(LeaderboardView view) {
-    switch (view) {
-      case LeaderboardView.total:
-        return 0;
-      case LeaderboardView.hard:
-        return 1;
-      case LeaderboardView.easy:
-        return 2;
-    }
-  }
-
-  String _leaderboardLabel(LeaderboardView view) {
-    switch (view) {
-      case LeaderboardView.total:
-        return 'TOTAL';
-      case LeaderboardView.hard:
-        return 'HARD';
-      case LeaderboardView.easy:
-        return 'EASY';
-    }
-  }
-
-  Future<LeaderboardView?> _pickLeaderboardView({
-    required Color fgColor,
-    required Color bgColor,
-  }) async {
-    final preferred = _decodeLeaderboardView(
-      ref.read(storageServiceProvider).leaderboardPreferredView,
-    );
-
-    final picked = await showDialog<LeaderboardView>(
-      context: context,
-      barrierColor: bgColor.withValues(alpha: 0.85),
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: bgColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: fgColor.withValues(alpha: 0.2)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'LEADERBOARD',
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: fgColor,
-                    letterSpacing: 3,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                for (final view in LeaderboardView.values)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(ctx).pop(view),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: fgColor.withValues(
-                              alpha: preferred == view ? 0.5 : 0.2,
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          _leaderboardLabel(view),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            color: fgColor,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    return picked;
   }
 }
 

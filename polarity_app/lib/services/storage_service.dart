@@ -1,13 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:polarity/core/security/score_guard.dart';
 
-enum DailyMissionProgress {
-  inProgress,
-  completedNow,
-  failedNow,
-  alreadyResolved,
-}
-
 class StorageService {
   static const _highScoreKey = 'hs_v1';
   static const _adsEnabledKey = 'ads_enabled';
@@ -21,20 +14,8 @@ class StorageService {
   static const _streakCountKey = 'streak_count';
   static const _lastPlayDateKey = 'last_play_date';
   static const _highScoreModeKey = 'hs_mode';
-  static const _leaderboardBestTotalKey = 'lb_best_total';
   static const _leaderboardBestEasyKey = 'lb_best_easy';
   static const _leaderboardBestHardKey = 'lb_best_hard';
-  static const _leaderboardPreferredViewKey = 'lb_pref_view';
-  static const _retentionDayKey = 'retention_day';
-  static const _dailyChallengeTargetKey = 'daily_challenge_target';
-  static const _dailyChallengeCompletedDayKey =
-      'daily_challenge_completed_day';
-  static const _dailyMissionDayKey = 'daily_mission_day';
-  static const _dailyMissionGoalKey = 'daily_mission_goal';
-  static const _dailyMissionRunsKey = 'daily_mission_runs';
-  static const _dailyMissionCompletedDayKey = 'daily_mission_completed_day';
-  static const _dailyMissionFailedDayKey = 'daily_mission_failed_day';
-  static const _reviveTokensKey = 'revive_tokens';
   static const _themeRotationsKey = 'theme_rotations';
   static const _rememberThemeAcrossLaunchesKey =
       'remember_theme_across_launches';
@@ -42,33 +23,7 @@ class StorageService {
   static const _activeThemeVarKey = 'active_theme_var';
   static const _activeThemeScoreKey = 'active_theme_score';
 
-  static const int _maxReviveTokens = 1;
-  static const int _dailyMissionPassLimit = 5;
-
   late SharedPreferences _prefs;
-
-  String _dateString(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  String _todayString() => _dateString(DateTime.now());
-
-  DateTime? _tryParseDateString(String dateString) {
-    final parts = dateString.split('-');
-    if (parts.length != 3) return null;
-    final y = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    final d = int.tryParse(parts[2]);
-    if (y == null || m == null || d == null) return null;
-    return DateTime(y, m, d, 12);
-  }
-
-  int _daySeed(String dayString) {
-    final day = _tryParseDateString(dayString);
-    if (day == null) return 0;
-    return DateTime.utc(day.year, day.month, day.day).millisecondsSinceEpoch ~/
-        Duration.millisecondsPerDay;
-  }
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -140,139 +95,24 @@ class StorageService {
   Future<void> setHighScoreMode(bool easyMode) =>
       _prefs.setBool(_highScoreModeKey, easyMode);
 
-  // --- Leaderboard local bests (total + per-mode) ---
-  int get leaderboardBestTotalScore =>
-      _prefs.getInt(_leaderboardBestTotalKey) ?? getHighScore();
-  Future<void> setLeaderboardBestTotalScore(int score) =>
-      _prefs.setInt(_leaderboardBestTotalKey, score);
-
-  int get leaderboardBestEasyScore =>
-      _prefs.getInt(_leaderboardBestEasyKey) ?? 0;
-  Future<void> setLeaderboardBestEasyScore(int score) =>
+    // --- Leaderboard per-mode local bests (for deduped score submits) ---
+    int get leaderboardBestEasyScore => _prefs.getInt(_leaderboardBestEasyKey) ?? 0;
+    Future<void> setLeaderboardBestEasyScore(int score) =>
       _prefs.setInt(_leaderboardBestEasyKey, score);
 
-  int get leaderboardBestHardScore =>
-      _prefs.getInt(_leaderboardBestHardKey) ?? 0;
-  Future<void> setLeaderboardBestHardScore(int score) =>
+    int get leaderboardBestHardScore => _prefs.getInt(_leaderboardBestHardKey) ?? 0;
+    Future<void> setLeaderboardBestHardScore(int score) =>
       _prefs.setInt(_leaderboardBestHardKey, score);
-
-  // --- Leaderboard view preference (0=total, 1=hard, 2=easy) ---
-  int get leaderboardPreferredView =>
-      _prefs.getInt(_leaderboardPreferredViewKey) ?? 0;
-  Future<void> setLeaderboardPreferredView(int value) =>
-      _prefs.setInt(_leaderboardPreferredViewKey, value);
-
-  // --- Retention: revive tokens ---
-  int get reviveTokens => _prefs.getInt(_reviveTokensKey) ?? 0;
-
-  void addReviveTokens(int amount) {
-    if (amount <= 0) return;
-    final next = reviveTokens + amount;
-    final clamped = next > _maxReviveTokens ? _maxReviveTokens : next;
-    _prefs.setInt(_reviveTokensKey, clamped);
-  }
-
-  bool consumeReviveToken() {
-    final current = reviveTokens;
-    if (current <= 0) return false;
-    _prefs.setInt(_reviveTokensKey, current - 1);
-    return true;
-  }
-
-  // --- Retention: daily challenge ---
-  int get dailyChallengeTarget => _prefs.getInt(_dailyChallengeTargetKey) ?? 25;
-  bool get isDailyChallengeCompleted =>
-      (_prefs.getString(_dailyChallengeCompletedDayKey) ?? '') ==
-      _todayString();
-
-  void markDailyChallengeCompleted() {
-    _prefs.setString(_dailyChallengeCompletedDayKey, _todayString());
-  }
-
-  // --- Retention: daily mission (hit target within limited passes) ---
-  int get dailyMissionRunsGoal =>
-      _prefs.getInt(_dailyMissionGoalKey) ?? _dailyMissionPassLimit;
-
-  int get dailyMissionRunsCount {
-    if ((_prefs.getString(_dailyMissionDayKey) ?? '') != _todayString()) {
-      return 0;
-    }
-    return _prefs.getInt(_dailyMissionRunsKey) ?? 0;
-  }
-
-  bool get isDailyMissionCompleted =>
-      (_prefs.getString(_dailyMissionCompletedDayKey) ?? '') ==
-      _todayString();
-
-  bool get isDailyMissionFailed =>
-      (_prefs.getString(_dailyMissionFailedDayKey) ?? '') == _todayString();
-
-  int get dailyMissionPassesRemaining {
-    final remaining = dailyMissionRunsGoal - dailyMissionRunsCount;
-    return remaining > 0 ? remaining : 0;
-  }
-
-  DailyMissionProgress recordRunForDailyMission({required int score}) {
-    final today = _todayString();
-    if ((_prefs.getString(_dailyMissionDayKey) ?? '') != today) {
-      _prefs.setString(_dailyMissionDayKey, today);
-      _prefs.setInt(_dailyMissionRunsKey, 0);
-      _prefs.setInt(_dailyMissionGoalKey, _dailyMissionPassLimit);
-    }
-
-    if (isDailyMissionCompleted || isDailyMissionFailed) {
-      return DailyMissionProgress.alreadyResolved;
-    }
-
-    final nextRuns = (_prefs.getInt(_dailyMissionRunsKey) ?? 0) + 1;
-    _prefs.setInt(_dailyMissionRunsKey, nextRuns);
-
-    if (score >= dailyChallengeTarget) {
-      _prefs.setString(_dailyMissionCompletedDayKey, today);
-      return DailyMissionProgress.completedNow;
-    }
-
-    if (nextRuns >= dailyMissionRunsGoal) {
-      _prefs.setString(_dailyMissionFailedDayKey, today);
-      return DailyMissionProgress.failedNow;
-    }
-
-    return DailyMissionProgress.inProgress;
-  }
-
-  /// Rolls daily retention state once per calendar day.
-  ///
-  /// Grants exactly 1 revive token daily (non-stacking).
-  void refreshDailyRetention() {
-    final today = _todayString();
-    final previousDay = _prefs.getString(_retentionDayKey) ?? '';
-    if (previousDay == today) return;
-
-    _prefs.setInt(_reviveTokensKey, 1);
-
-    final seed = _daySeed(today);
-    final challengeTarget = 30 + (seed % 46); // 30..75
-    final missionGoal = _dailyMissionPassLimit; // fixed pass limit
-
-    _prefs.setString(_retentionDayKey, today);
-    _prefs.setInt(_dailyChallengeTargetKey, challengeTarget);
-    _prefs.setString(_dailyMissionDayKey, today);
-    _prefs.setInt(_dailyMissionGoalKey, missionGoal);
-    _prefs.setInt(_dailyMissionRunsKey, 0);
-    _prefs.remove(_dailyMissionCompletedDayKey);
-    _prefs.remove(_dailyMissionFailedDayKey);
-    _prefs.remove(_dailyChallengeCompletedDayKey);
-  }
 
   // --- Theme Rotation Indices ---
   String get themeRotationsJson => _prefs.getString(_themeRotationsKey) ?? '';
   Future<void> setThemeRotationsJson(String json) =>
       _prefs.setString(_themeRotationsKey, json);
 
-  // --- Remember active theme across app relaunch ---
-  bool get rememberThemeAcrossLaunches =>
+    // --- Remember active theme across app relaunch ---
+    bool get rememberThemeAcrossLaunches =>
       _prefs.getBool(_rememberThemeAcrossLaunchesKey) ?? true;
-  Future<void> setRememberThemeAcrossLaunches(bool value) =>
+    Future<void> setRememberThemeAcrossLaunches(bool value) =>
       _prefs.setBool(_rememberThemeAcrossLaunchesKey, value);
 
   // --- Active Theme Persistence ---

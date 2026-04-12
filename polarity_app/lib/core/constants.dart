@@ -107,15 +107,7 @@ class GameConstants {
     defaultValue: 'ca-app-pub-3940256099942544/1712485313',
   );
 
-  // Leaderboard IDs (total + separate hard/easy boards). Override with --dart-define.
-  static const String androidLeaderboardTotalId = String.fromEnvironment(
-    'ANDROID_LEADERBOARD_TOTAL_ID',
-    defaultValue: 'CgkI_placeholder_leaderboard_total',
-  );
-  static const String iosLeaderboardTotalId = String.fromEnvironment(
-    'IOS_LEADERBOARD_TOTAL_ID',
-    defaultValue: 'polarity_leaderboard_total',
-  );
+  // Leaderboard IDs (separate hard/easy boards). Override with --dart-define.
   static const String androidLeaderboardHardId = String.fromEnvironment(
     'ANDROID_LEADERBOARD_HARD_ID',
     defaultValue: 'CgkI_placeholder_leaderboard',

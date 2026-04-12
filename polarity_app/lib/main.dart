@@ -100,7 +100,6 @@ Future<void> main() async {
   }
 
   // Update day streak
-  storage.refreshDailyRetention();
   storage.updateStreak();
 
   runApp(

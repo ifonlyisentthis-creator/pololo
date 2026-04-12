@@ -20,16 +20,8 @@ class _FakeStorageService extends StorageService {
   bool _eliteUnlocked = false;
   int _milestoneTier = 0;
   bool _rememberThemeAcrossLaunches = true;
-  int _leaderboardBestTotalScore = 0;
   int _leaderboardBestEasyScore = 0;
   int _leaderboardBestHardScore = 0;
-  int _reviveTokens = 0;
-  final int _dailyMissionRunsGoal = 3;
-  int _dailyMissionRunsCount = 0;
-  bool _dailyMissionCompleted = false;
-  bool _dailyMissionFailed = false;
-  final int _dailyChallengeTarget = 25;
-  bool _dailyChallengeCompleted = false;
 
   @override
   int getHighScore() => _highScore;
@@ -115,14 +107,6 @@ class _FakeStorageService extends StorageService {
   Future<void> setHighScoreMode(bool easyMode) async {}
 
   @override
-  int get leaderboardBestTotalScore => _leaderboardBestTotalScore;
-
-  @override
-  Future<void> setLeaderboardBestTotalScore(int score) async {
-    _leaderboardBestTotalScore = score;
-  }
-
-  @override
   int get leaderboardBestEasyScore => _leaderboardBestEasyScore;
 
   @override
@@ -137,69 +121,6 @@ class _FakeStorageService extends StorageService {
   Future<void> setLeaderboardBestHardScore(int score) async {
     _leaderboardBestHardScore = score;
   }
-
-  @override
-  int get reviveTokens => _reviveTokens;
-
-  @override
-  void addReviveTokens(int amount) {
-    if (amount <= 0) return;
-    _reviveTokens += amount;
-  }
-
-  @override
-  bool consumeReviveToken() {
-    if (_reviveTokens <= 0) return false;
-    _reviveTokens -= 1;
-    return true;
-  }
-
-  @override
-  int get dailyChallengeTarget => _dailyChallengeTarget;
-
-  @override
-  bool get isDailyChallengeCompleted => _dailyChallengeCompleted;
-
-  @override
-  void markDailyChallengeCompleted() {
-    _dailyChallengeCompleted = true;
-  }
-
-  @override
-  int get dailyMissionRunsGoal => _dailyMissionRunsGoal;
-
-  @override
-  int get dailyMissionRunsCount => _dailyMissionRunsCount;
-
-  @override
-  bool get isDailyMissionCompleted => _dailyMissionCompleted;
-
-  @override
-  bool get isDailyMissionFailed => _dailyMissionFailed;
-
-  @override
-  int get dailyMissionPassesRemaining {
-    final remaining = _dailyMissionRunsGoal - _dailyMissionRunsCount;
-    return remaining > 0 ? remaining : 0;
-  }
-
-  @override
-  DailyMissionProgress recordRunForDailyMission({required int score}) {
-    _dailyMissionRunsCount += 1;
-    if (score >= _dailyChallengeTarget) {
-      _dailyMissionCompleted = true;
-      return DailyMissionProgress.completedNow;
-    }
-    if (!_dailyMissionCompleted &&
-        _dailyMissionRunsCount >= _dailyMissionRunsGoal) {
-      _dailyMissionFailed = true;
-      return DailyMissionProgress.failedNow;
-    }
-    return DailyMissionProgress.inProgress;
-  }
-
-  @override
-  void refreshDailyRetention() {}
 
   @override
   Future<void> setThemeRotationsJson(String json) async {}
