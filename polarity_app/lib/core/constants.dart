@@ -136,7 +136,7 @@ class GameConstants {
   static const int minScoreForReview = 20;
 
   // ── Privacy ──
-  static const String privacyPolicyUrl = 'https://example.com/privacy';
+  static const String privacyPolicyUrl = 'https://ifonlyisentthis-creator.github.io/pololo/privacy-policy.html';
 
   // ── death roasts (300) ──
   static const List<String> deathRoasts = [

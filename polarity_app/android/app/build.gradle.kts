@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.game.polarity"
+    namespace = "com.polarity.game"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.game.polarity"
+        applicationId = "com.polarity.game"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
         versionCode = flutter.versionCode
