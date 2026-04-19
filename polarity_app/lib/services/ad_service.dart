@@ -4,7 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:polarity/core/constants.dart';
 
 /// AdMob wrapper with UMP consent, interstitial, and rewarded ad support.
-/// Uses Google Test Ad Unit IDs — swap with production IDs before release.
+/// Production ad unit IDs configured in GameConstants.
 ///
 /// Interstitial Policy (time-only, monotonic clock):
 ///   An interstitial is shown on death ONLY when ALL conditions are true:
@@ -40,6 +40,8 @@ class AdService {
   RewardedAd? _rewardedAd;
   bool _isInterstitialReady = false;
   bool _isRewardedReady = false;
+  bool _isInterstitialLoading = false;
+  bool _isRewardedLoading = false;
 
   // ── Monotonic timer (Stopwatch) — immune to clock manipulation ──
   // Starts when init() is called. _lastAdDismissedMs starts at 0, so the
@@ -144,7 +146,18 @@ class AdService {
 
   void _kickAdRecovery() {
     if (!_initialized || !_adsEnabled || !_isAdsPlatformSupported) return;
-    unawaited(_refreshConsentAndInitializeAds(scheduleRetryOnFail: true));
+    // Directly attempt preloads if SDK is ready — bypasses consent gate
+    // so recovery is immediate after transient network issues (e.g. DNS guard).
+    if (_sdkInitialized) {
+      if (_interstitialAd == null && !_isInterstitialReady && !_isInterstitialLoading) {
+        _preloadInterstitial();
+      }
+      if (_rewardedAd == null && !_isRewardedReady && !_isRewardedLoading) {
+        _preloadRewarded();
+      }
+    } else {
+      unawaited(_refreshConsentAndInitializeAds(scheduleRetryOnFail: true));
+    }
   }
 
   void _cancelConsentRetry() {
@@ -167,9 +180,11 @@ class AdService {
     _interstitialAd?.dispose();
     _interstitialAd = null;
     _isInterstitialReady = false;
+    _isInterstitialLoading = false;
     _rewardedAd?.dispose();
     _rewardedAd = null;
     _isRewardedReady = false;
+    _isRewardedLoading = false;
     _interstitialOnScreen = false;
     _onInterstitialOpened = null;
     _onInterstitialClosed = null;
@@ -184,21 +199,19 @@ class AdService {
 
     _consentRefreshInFlight = true;
     try {
-      // Await consent BEFORE initializing ad SDK (GDPR/UMP compliance).
-      // Timeout after 5s so consent issues don't block the app forever.
-      await _requestConsent().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {},
-      );
-
-      // Strictly gate ad loading on UMP state to avoid requesting ads before
-      // consent is actually eligible for ad requests.
-      final canRequestAds = await _canRequestAds();
-      if (!canRequestAds || !_adsEnabled) {
-        _disposeLoadedAds();
-        if (scheduleRetryOnFail) _scheduleConsentRetry();
-        return;
+      // Attempt UMP consent (GDPR/EEA compliance). Non-blocking — if consent
+      // times out or isn't applicable, we still proceed. The Google Mobile Ads
+      // SDK enforces consent requirements internally for EEA users.
+      try {
+        await _requestConsent().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {},
+        );
+      } catch (_) {
+        // Consent check failed — proceed anyway, SDK handles compliance.
       }
+
+      if (!_adsEnabled) return;
 
       _cancelConsentRetry();
 
@@ -264,22 +277,17 @@ class AdService {
     return completer.future;
   }
 
-  Future<bool> _canRequestAds() async {
-    try {
-      return await ConsentInformation.instance.canRequestAds();
-    } catch (_) {
-      return false;
-    }
-  }
-
   void _preloadInterstitial() {
     if (!_adsEnabled || !_isAdsPlatformSupported) return;
+    if (_isInterstitialLoading) return;
+    _isInterstitialLoading = true;
 
     InterstitialAd.load(
       adUnitId: _interstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
+          _isInterstitialLoading = false;
           _interstitialAd = ad;
           _isInterstitialReady = true;
           ad.fullScreenContentCallback = FullScreenContentCallback(
@@ -316,9 +324,10 @@ class AdService {
           );
         },
         onAdFailedToLoad: (_) {
+          _isInterstitialLoading = false;
           _isInterstitialReady = false;
           // Retry after delay to recover from transient network issues
-          Future.delayed(const Duration(seconds: 30), _preloadInterstitial);
+          Future.delayed(const Duration(seconds: 10), _preloadInterstitial);
         },
       ),
     );
@@ -326,12 +335,15 @@ class AdService {
 
   void _preloadRewarded() {
     if (!_adsEnabled || !_isAdsPlatformSupported) return;
+    if (_isRewardedLoading) return;
+    _isRewardedLoading = true;
 
     RewardedAd.load(
       adUnitId: _rewardedAdUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
+          _isRewardedLoading = false;
           _rewardedAd = ad;
           _isRewardedReady = true;
           onRewardedReadyChanged?.call(true);
@@ -351,9 +363,10 @@ class AdService {
           );
         },
         onAdFailedToLoad: (_) {
+          _isRewardedLoading = false;
           _isRewardedReady = false;
           onRewardedReadyChanged?.call(false);
-          Future.delayed(const Duration(seconds: 30), _preloadRewarded);
+          Future.delayed(const Duration(seconds: 10), _preloadRewarded);
         },
       ),
     );

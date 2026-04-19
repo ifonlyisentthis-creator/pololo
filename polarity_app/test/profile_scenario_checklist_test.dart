@@ -89,7 +89,6 @@ void main() {
 
       engine.debugInvincible = false;
       engine.isInvincible = false;
-      engine.easyMode = false;
       engine.shieldJustBroke = false;
       engine.player.x = GameConstants.playerRadius + 1;
       engine.obstacles

@@ -51,50 +51,30 @@ class GamesServicesClient implements GamesPlatformClient {
   }
 }
 
-class _LeaderboardIds {
-  final String androidId;
-  final String iosId;
-
-  const _LeaderboardIds({
-    required this.androidId,
-    required this.iosId,
-  });
-}
-
 /// Play Games Services / Game Center wrapper for leaderboards.
 ///
 /// Guarantees:
 /// - Auto sign-in attempts before show/submit.
-/// - Separate hard/easy leaderboard IDs.
 /// - Score retry queue while auth is unavailable.
 class LeaderboardService {
   LeaderboardService({
     GamesPlatformClient? client,
-    String? androidLeaderboardHardId,
-    String? androidLeaderboardEasyId,
-    String? iosLeaderboardHardId,
-    String? iosLeaderboardEasyId,
+    String? androidLeaderboardId,
+    String? iosLeaderboardId,
   })  : _client = client ?? GamesServicesClient(),
-        _hardIds = _LeaderboardIds(
-          androidId:
-              androidLeaderboardHardId ?? GameConstants.androidLeaderboardHardId,
-          iosId: iosLeaderboardHardId ?? GameConstants.iosLeaderboardHardId,
-        ),
-        _easyIds = _LeaderboardIds(
-          androidId:
-              androidLeaderboardEasyId ?? GameConstants.androidLeaderboardEasyId,
-          iosId: iosLeaderboardEasyId ?? GameConstants.iosLeaderboardEasyId,
-        );
+        _androidId = androidLeaderboardId ?? GameConstants.androidLeaderboardId,
+        _iosId = iosLeaderboardId ?? GameConstants.iosLeaderboardId;
 
   final GamesPlatformClient _client;
-  final _LeaderboardIds _hardIds;
-  final _LeaderboardIds _easyIds;
+  final String _androidId;
+  final String _iosId;
 
   bool _signedIn = false;
+  bool _signInDeclined = false;
   Future<bool>? _signInFuture;
+  DateTime? _lastSignInAttempt;
 
-  int _pendingEasyScore = 0;
-  int _pendingHardScore = 0;
+  int _pendingScore = 0;
 
   static const Duration _signInTimeout = Duration(seconds: 12);
   static const Duration _operationTimeout = Duration(seconds: 15);
@@ -107,16 +87,12 @@ class LeaderboardService {
         defaultTargetPlatform == TargetPlatform.iOS;
   }
 
-  _LeaderboardIds _idsForMode(bool easyMode) {
-    return easyMode ? _easyIds : _hardIds;
-  }
-
-  bool _isConfiguredForCurrentPlatform(_LeaderboardIds ids) {
+  bool get _isConfigured {
     if (defaultTargetPlatform == TargetPlatform.android) {
-      return ids.androidId.isNotEmpty && !ids.androidId.contains('placeholder');
+      return _androidId.isNotEmpty && !_androidId.contains('placeholder');
     }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return ids.iosId.isNotEmpty && !ids.iosId.contains('placeholder');
+      return _iosId.isNotEmpty && !_iosId.contains('placeholder');
     }
     return false;
   }
@@ -132,13 +108,11 @@ class LeaderboardService {
     await _flushPendingScores();
   }
 
-  Future<void> submitScore(int score, {required bool easyMode}) async {
+  Future<void> submitScore(int score) async {
     if (score <= 0 || !_isSupportedPlatform) return;
+    if (!_isConfigured) return;
 
-    final ids = _idsForMode(easyMode);
-    if (!_isConfiguredForCurrentPlatform(ids)) return;
-
-    _queuePendingScore(score, easyMode: easyMode);
+    if (score > _pendingScore) _pendingScore = score;
 
     final signedIn = await _ensureSignedIn();
     if (!signedIn) return;
@@ -146,13 +120,10 @@ class LeaderboardService {
     await _flushPendingScores();
   }
 
-  Future<bool> showLeaderboard({required bool easyMode}) async {
+  Future<bool> showLeaderboard() async {
     if (!_isSupportedPlatform) return false;
 
-    final ids = _idsForMode(easyMode);
-    final specificLeaderboardConfigured = _isConfiguredForCurrentPlatform(ids);
-
-    final signedIn = await _ensureSignedIn();
+    final signedIn = await _ensureSignedIn(forceRetry: true);
     if (!signedIn) return false;
 
     await _flushPendingScores();
@@ -160,10 +131,8 @@ class LeaderboardService {
     try {
       final result = await _client
           .showLeaderboards(
-            androidLeaderboardID: specificLeaderboardConfigured
-                ? ids.androidId
-                : '',
-            iOSLeaderboardID: specificLeaderboardConfigured ? ids.iosId : '',
+            androidLeaderboardID: _isConfigured ? _androidId : '',
+            iOSLeaderboardID: _isConfigured ? _iosId : '',
           )
           .timeout(
             _operationTimeout,
@@ -175,19 +144,16 @@ class LeaderboardService {
     }
   }
 
-  void _queuePendingScore(int score, {required bool easyMode}) {
-    if (easyMode) {
-      if (score > _pendingEasyScore) _pendingEasyScore = score;
-      return;
-    }
-    if (score > _pendingHardScore) _pendingHardScore = score;
-  }
+  /// Auto sign-in: attempts once silently. If user cancels or it fails,
+  /// won't retry for [_signInCooldown] unless [forceRetry] is true
+  /// (used when user explicitly taps the leaderboard button).
+  Future<bool> _ensureSignedIn({bool forceRetry = false}) async {
+    if (_signedIn) return true;
+    if (!_isSupportedPlatform) return false;
 
-  Future<bool> _ensureSignedIn() async {
-    if (!_isSupportedPlatform) {
-      _signedIn = false;
-      return false;
-    }
+    // Don't spam sign-in — only retry when user explicitly taps leaderboard
+    if (!forceRetry && _signInDeclined) return false;
+    if (!forceRetry && _lastSignInAttempt != null) return false;
 
     final inFlight = _signInFuture;
     if (inFlight != null) return inFlight;
@@ -200,12 +166,14 @@ class LeaderboardService {
   }
 
   Future<bool> _signInInternal() async {
+    _lastSignInAttempt = DateTime.now();
     try {
       final alreadySignedIn = await _client
           .isSignedIn()
           .timeout(_signInTimeout, onTimeout: () => false);
       if (alreadySignedIn) {
         _signedIn = true;
+        _signInDeclined = false;
         return true;
       }
 
@@ -213,7 +181,9 @@ class LeaderboardService {
           .signIn()
           .timeout(_signInTimeout, onTimeout: () => 'timeout');
       if (signInResult != null) {
+        // signIn returned non-null = error or user cancelled
         _signedIn = false;
+        _signInDeclined = true;
         return false;
       }
 
@@ -221,9 +191,11 @@ class LeaderboardService {
           .isSignedIn()
           .timeout(_signInTimeout, onTimeout: () => false);
       _signedIn = signedInNow;
+      _signInDeclined = !signedInNow;
       return signedInNow;
     } catch (_) {
       _signedIn = false;
+      _signInDeclined = true;
       return false;
     }
   }
@@ -231,32 +203,23 @@ class LeaderboardService {
   Future<void> _flushPendingScores() async {
     if (!_signedIn) return;
 
-    final pendingHard = _pendingHardScore;
-    if (pendingHard > 0) {
-      final ok = await _submitScoreNow(pendingHard, easyMode: false);
-      if (ok && _pendingHardScore == pendingHard) {
-        _pendingHardScore = 0;
-      }
-    }
-
-    final pendingEasy = _pendingEasyScore;
-    if (pendingEasy > 0) {
-      final ok = await _submitScoreNow(pendingEasy, easyMode: true);
-      if (ok && _pendingEasyScore == pendingEasy) {
-        _pendingEasyScore = 0;
+    final pending = _pendingScore;
+    if (pending > 0) {
+      final ok = await _submitScoreNow(pending);
+      if (ok && _pendingScore == pending) {
+        _pendingScore = 0;
       }
     }
   }
 
-  Future<bool> _submitScoreNow(int score, {required bool easyMode}) async {
-    final ids = _idsForMode(easyMode);
-    if (!_isConfiguredForCurrentPlatform(ids)) return false;
+  Future<bool> _submitScoreNow(int score) async {
+    if (!_isConfigured) return false;
 
     try {
       final result = await _client
           .submitScore(
-            androidLeaderboardID: ids.androidId,
-            iOSLeaderboardID: ids.iosId,
+            androidLeaderboardID: _androidId,
+            iOSLeaderboardID: _iosId,
             value: score,
           )
           .timeout(

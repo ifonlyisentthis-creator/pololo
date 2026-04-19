@@ -125,23 +125,6 @@ class SettingsScreen extends ConsumerWidget {
 
                       _divider(fgColor),
 
-                      // Difficulty toggle
-                      _SettingsTile(
-                        label: 'DIFFICULTY',
-                        description:
-                            ref.watch(easyModeProvider) ? 'EASY' : 'HARD',
-                        value: ref.watch(easyModeProvider),
-                        fgColor: fgColor,
-                        onChanged: (val) {
-                          ref.read(easyModeProvider.notifier).state = val;
-                          ref.read(storageServiceProvider).setEasyMode(val);
-                          ref.read(gameEngineProvider).easyMode = val;
-                          ref.read(hapticServiceProvider).selectionClick();
-                        },
-                      ),
-
-                      _divider(fgColor),
-
                       // Remember active theme across app relaunch
                       _SettingsTile(
                         label: 'REMEMBER THEME',

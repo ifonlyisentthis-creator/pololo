@@ -87,22 +87,20 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  test('submitScore routes easy scores to easy leaderboard IDs', () async {
+  test('submitScore sends to configured leaderboard IDs', () async {
     final client = _FakeGamesClient();
     final service = LeaderboardService(
       client: client,
-      androidLeaderboardHardId: 'android_hard',
-      androidLeaderboardEasyId: 'android_easy',
-      iosLeaderboardHardId: 'ios_hard',
-      iosLeaderboardEasyId: 'ios_easy',
+      androidLeaderboardId: 'android_lb',
+      iosLeaderboardId: 'ios_lb',
     );
 
-    await service.submitScore(42, easyMode: true);
+    await service.submitScore(42);
 
     expect(client.signInCalls, 1);
     expect(client.submits.length, 1);
-    expect(client.submits.first.androidLeaderboardID, 'android_easy');
-    expect(client.submits.first.iOSLeaderboardID, 'ios_easy');
+    expect(client.submits.first.androidLeaderboardID, 'android_lb');
+    expect(client.submits.first.iOSLeaderboardID, 'ios_lb');
     expect(client.submits.first.value, 42);
   });
 
@@ -110,40 +108,34 @@ void main() {
     final client = _FakeGamesClient()..failSignIn = true;
     final service = LeaderboardService(
       client: client,
-      androidLeaderboardHardId: 'android_hard',
-      androidLeaderboardEasyId: 'android_easy',
-      iosLeaderboardHardId: 'ios_hard',
-      iosLeaderboardEasyId: 'ios_easy',
+      androidLeaderboardId: 'android_lb',
+      iosLeaderboardId: 'ios_lb',
     );
 
-    await service.submitScore(10, easyMode: false);
-    await service.submitScore(50, easyMode: false);
-    await service.submitScore(20, easyMode: false);
+    await service.submitScore(10);
+    await service.submitScore(50);
+    await service.submitScore(20);
     expect(client.submits, isEmpty);
 
     client.failSignIn = false;
     await service.init();
 
     expect(client.submits.length, 1);
-    expect(client.submits.first.androidLeaderboardID, 'android_hard');
+    expect(client.submits.first.androidLeaderboardID, 'android_lb');
     expect(client.submits.first.value, 50);
   });
 
-  test('showLeaderboard opens board for selected mode', () async {
+  test('showLeaderboard opens board', () async {
     final client = _FakeGamesClient()..signedIn = true;
     final service = LeaderboardService(
       client: client,
-      androidLeaderboardHardId: 'android_hard',
-      androidLeaderboardEasyId: 'android_easy',
-      iosLeaderboardHardId: 'ios_hard',
-      iosLeaderboardEasyId: 'ios_easy',
+      androidLeaderboardId: 'android_lb',
+      iosLeaderboardId: 'ios_lb',
     );
 
-    await service.showLeaderboard(easyMode: false);
-    await service.showLeaderboard(easyMode: true);
+    await service.showLeaderboard();
 
-    expect(client.shows.length, 2);
-    expect(client.shows[0].androidLeaderboardID, 'android_hard');
-    expect(client.shows[1].androidLeaderboardID, 'android_easy');
+    expect(client.shows.length, 1);
+    expect(client.shows[0].androidLeaderboardID, 'android_lb');
   });
 }

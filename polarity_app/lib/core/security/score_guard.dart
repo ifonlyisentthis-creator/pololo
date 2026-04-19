@@ -12,9 +12,24 @@ class ScoreGuard {
   static int _obfuscatedScore = 0;
   static int _obfuscatedHighScore = 0;
 
-  // Secret key for HMAC (in production, derive from device fingerprint)
-  static const String _hmacSecret = 'p0l4r1ty_s3cur3_k3y_2024!@#';
+  // HMAC secret derived from build-time value + package identity
+  static final String _hmacSecret = _deriveSecret();
   static const String _salt = 'polarity_salt_v1';
+
+  static String _deriveSecret() {
+    // Combine multiple app-specific constants to create a key that's
+    // harder to extract than a single hardcoded string
+    const parts = [
+      'com.polarity.game',
+      'p0l4r1ty',
+      '2024',
+      'mAgN3t1c',
+    ];
+    final key = utf8.encode(parts.join(':'));
+    final bytes = utf8.encode('polarity_key_derivation');
+    final hmac = Hmac(sha256, key);
+    return hmac.convert(bytes).toString();
+  }
 
   static void initialize() {
     final rng = Random.secure();

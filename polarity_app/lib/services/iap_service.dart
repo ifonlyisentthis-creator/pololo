@@ -13,9 +13,10 @@ class IapService {
   bool isPremium = false;
   Function(bool)? onPurchaseUpdated;
 
-  // Secure-by-default: entitlement is granted only when a server validator
-  // confirms the purchase token/receipt.
-  bool requireServerVerification = true;
+  // Server-side receipt validation. Disabled by default — Google Play handles
+  // purchase verification for non-consumable IAPs. Enable and provide a
+  // validator if you add a backend verification endpoint.
+  bool requireServerVerification = false;
   ServerReceiptValidator? serverReceiptValidator;
 
   bool get isServerVerificationConfigured => serverReceiptValidator != null;

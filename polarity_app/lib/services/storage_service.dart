@@ -8,14 +8,11 @@ class StorageService {
   static const _hapticsEnabledKey = 'haptics_enabled';
   static const _audioEnabledKey = 'audio_enabled';
   static const _firstLaunchKey = 'first_launch';
-  static const _easyModeKey = 'easy_mode';
   static const _eliteUnlockedKey = 'elite_unlocked';
   static const _milestoneTierKey = 'milestone_tier';
   static const _streakCountKey = 'streak_count';
   static const _lastPlayDateKey = 'last_play_date';
-  static const _highScoreModeKey = 'hs_mode';
-  static const _leaderboardBestEasyKey = 'lb_best_easy';
-  static const _leaderboardBestHardKey = 'lb_best_hard';
+  static const _leaderboardBestKey = 'lb_best_hard';
   static const _themeRotationsKey = 'theme_rotations';
   static const _rememberThemeAcrossLaunchesKey =
       'remember_theme_across_launches';
@@ -66,11 +63,6 @@ class StorageService {
   Future<void> setFirstLaunchDone() =>
       _prefs.setBool(_firstLaunchKey, false);
 
-  // --- Easy Mode (walls don't kill) ---
-  bool get easyMode => _prefs.getBool(_easyModeKey) ?? false;
-  Future<void> setEasyMode(bool value) =>
-      _prefs.setBool(_easyModeKey, value);
-
   // --- Elite Unlock (permanent cosmetic) ---
   bool get isEliteUnlocked => _prefs.getBool(_eliteUnlockedKey) ?? false;
   Future<void> setEliteUnlocked(bool value) =>
@@ -90,19 +82,10 @@ class StorageService {
   Future<void> setLastPlayDate(String date) =>
       _prefs.setString(_lastPlayDateKey, date);
 
-  // --- High Score Mode (which mode the high score was set in) ---
-  bool get highScoreIsEasyMode => _prefs.getBool(_highScoreModeKey) ?? false;
-  Future<void> setHighScoreMode(bool easyMode) =>
-      _prefs.setBool(_highScoreModeKey, easyMode);
-
-    // --- Leaderboard per-mode local bests (for deduped score submits) ---
-    int get leaderboardBestEasyScore => _prefs.getInt(_leaderboardBestEasyKey) ?? 0;
-    Future<void> setLeaderboardBestEasyScore(int score) =>
-      _prefs.setInt(_leaderboardBestEasyKey, score);
-
-    int get leaderboardBestHardScore => _prefs.getInt(_leaderboardBestHardKey) ?? 0;
-    Future<void> setLeaderboardBestHardScore(int score) =>
-      _prefs.setInt(_leaderboardBestHardKey, score);
+    // --- Leaderboard local best (for deduped score submits) ---
+    int get leaderboardBestScore => _prefs.getInt(_leaderboardBestKey) ?? 0;
+    Future<void> setLeaderboardBestScore(int score) =>
+      _prefs.setInt(_leaderboardBestKey, score);
 
   // --- Theme Rotation Indices ---
   String get themeRotationsJson => _prefs.getString(_themeRotationsKey) ?? '';

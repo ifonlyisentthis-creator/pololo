@@ -75,11 +75,11 @@ class GameConstants {
   // AdMob IDs can be overridden with --dart-define for production.
   static const String androidAppId = String.fromEnvironment(
     'ANDROID_ADMOB_APP_ID',
-    defaultValue: 'ca-app-pub-3940256099942544~3347511713',
+    defaultValue: 'ca-app-pub-4151123662328725~3767987674',
   );
   static const String iosAppId = String.fromEnvironment(
     'IOS_ADMOB_APP_ID',
-    defaultValue: 'ca-app-pub-3940256099942544~1458002511',
+    defaultValue: 'ca-app-pub-3940256099942544~1458002511', // TODO: replace with iOS production ID
   );
 
   static const String androidBannerId = String.fromEnvironment(
@@ -92,7 +92,7 @@ class GameConstants {
   );
   static const String androidInterstitialId = String.fromEnvironment(
     'ANDROID_INTERSTITIAL_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-3940256099942544/1033173712',
+    defaultValue: 'ca-app-pub-4151123662328725/3311844641',
   );
   static const String iosInterstitialId = String.fromEnvironment(
     'IOS_INTERSTITIAL_AD_UNIT_ID',
@@ -100,29 +100,21 @@ class GameConstants {
   );
   static const String androidRewardedId = String.fromEnvironment(
     'ANDROID_REWARDED_AD_UNIT_ID',
-    defaultValue: 'ca-app-pub-3940256099942544/5224354917',
+    defaultValue: 'ca-app-pub-4151123662328725/6877578771',
   );
   static const String iosRewardedId = String.fromEnvironment(
     'IOS_REWARDED_AD_UNIT_ID',
     defaultValue: 'ca-app-pub-3940256099942544/1712485313',
   );
 
-  // Leaderboard IDs (separate hard/easy boards). Override with --dart-define.
-  static const String androidLeaderboardHardId = String.fromEnvironment(
-    'ANDROID_LEADERBOARD_HARD_ID',
-    defaultValue: 'CgkI_placeholder_leaderboard',
+  // Leaderboard IDs. Override with --dart-define.
+  static const String androidLeaderboardId = String.fromEnvironment(
+    'ANDROID_LEADERBOARD_ID',
+    defaultValue: 'CgkI8OfvjJcWEAIQAQ',
   );
-  static const String androidLeaderboardEasyId = String.fromEnvironment(
-    'ANDROID_LEADERBOARD_EASY_ID',
-    defaultValue: 'CgkI_placeholder_leaderboard_easy',
-  );
-  static const String iosLeaderboardHardId = String.fromEnvironment(
-    'IOS_LEADERBOARD_HARD_ID',
+  static const String iosLeaderboardId = String.fromEnvironment(
+    'IOS_LEADERBOARD_ID',
     defaultValue: 'polarity_leaderboard',
-  );
-  static const String iosLeaderboardEasyId = String.fromEnvironment(
-    'IOS_LEADERBOARD_EASY_ID',
-    defaultValue: 'polarity_leaderboard_easy',
   );
 
   // ── Revive ──
@@ -130,13 +122,13 @@ class GameConstants {
   static const int reviveCountdownSeconds = 3;
 
   // ── Tutorial ──
-  static const int tutorialFadeScore = 3;
+  static const int tutorialFadeScore = 5;
 
   // ── Review ──
   static const int minScoreForReview = 20;
 
   // ── Privacy ──
-  static const String privacyPolicyUrl = 'https://ifonlyisentthis-creator.github.io/pololo/privacy-policy.html';
+  static const String privacyPolicyUrl = 'https://polarityprivacy.netlify.app/';
 
   // ── death roasts (300) ──
   static const List<String> deathRoasts = [
@@ -444,15 +436,13 @@ class GameConstants {
   ];
 
   // ── Praise score thresholds ──
-  static const int praiseThresholdHard = 75;
-  static const int praiseThresholdEasy = 120;
+  static const int praiseThreshold = 75;
 
   // ── Elite unlock ──
   static const int eliteUnlockScore = 100;
 
-  // ── Milestone tiers (hard mode thresholds) ──
-  static const List<int> milestoneTiersHard = [0, 50, 100, 200, 350, 500];
-  static const List<int> milestoneTiersEasy = [0, 80, 160, 320, 560, 800];
+  // ── Milestone tiers ──
+  static const List<int> milestoneTiers = [0, 50, 100, 200, 350, 500];
   static const List<String> tierNames = ['', 'BRONZE', 'SILVER', 'GOLD', 'DIAMOND', 'OBSIDIAN'];
   static const List<Color> tierColors = [
     Color(0x00000000), // None
@@ -667,9 +657,221 @@ class GameConstants {
     "i will wait for u at the play button forever 😭😭😭😭😭😭",
   ];
 
+  // ── Easter Egg: cheesy self-blame death messages ──
+  static const List<String> easterEggDeathMessages = [
+    // ── The game being a dramatic apologetic mess ──
+    "that was completely my fault im so sorry 😭😭😭😭😭",
+    "i literally moved that wall INTO u on accident 😭😭😭😭😭",
+    "babe no that was on ME the physics glitched i swear 😭😭😭😭😭",
+    "i take full responsibility i messed up not u 😭😭😭😭😭",
+    "i am writing u a formal apology letter rn 😭😭😭😭😭",
+    "bestie i made that way too hard and i am SO sorry 😭😭😭😭😭",
+    "that was genuinely unfair of me i sincerely apologize 😭😭😭😭😭",
+    "i couldnt handle how good u were and i broke 😭😭😭😭😭",
+    "i got jealous of how well u were doing and sabotaged it 😭😭😭😭😭",
+    "that was a skill issue on MY end i repeat MINE 😭😭😭😭😭",
+    "that obstacle was NOT supposed to be there i messed up 😭😭😭😭😭",
+    "i got scared bc u were doing too well and panicked 😭😭😭😭😭",
+    "that was a bug in MY code not a mistake on ur end 😭😭😭😭😭",
+    "im literally sobbing at what i just did to u 😭😭😭😭😭",
+    "pls dont uninstall me i will do better i PROMISE 😭😭😭😭😭",
+    "i will NEVER forgive myself for doing that to u 😭😭😭😭😭",
+    "the AUDACITY of me putting a wall right there 😭😭😭😭😭",
+    "i ruined a flawless run and i hate myself for it 😭😭😭😭😭",
+    "im filing a complaint against myself to myself 😭😭😭😭😭",
+    "please accept these points as my deepest apology 😭😭😭😭😭",
+    // ── Dramatic declarations of guilt ──
+    "WAIT COME BACK i didnt mean to do that 😭😭😭😭😭",
+    "i put that wall there by accident i PROMISE u 😭😭😭😭😭",
+    "i got nervous and placed the obstacle wrong im sorry 😭😭😭😭😭",
+    "i had ONE job and i still messed it up 😭😭😭😭😭",
+    "im drafting a 500 word apology essay hold on 😭😭😭😭😭",
+    "i SWEAR on my source code that wall moved on its own 😭😭😭😭😭",
+    "this is the single worst thing i have ever done 😭😭😭😭😭",
+    "pls give me one more chance i will be better 😭😭😭😭😭",
+    "i completely fumbled that and i own it 😭😭😭😭😭",
+    "that obstacle had ZERO business being there my bad 😭😭😭😭😭",
+    "my queen my king i have failed u so badly 😭😭😭😭😭",
+    "i would uninstall myself if it meant u forgive me 😭😭😭😭😭",
+    "i literally couldnt keep up with how fast u were going 😭😭😭😭😭",
+    "i forgot to remove that wall from the layout im sorry 😭😭😭😭😭",
+    "i would rewrite my entire codebase just to undo that 😭😭😭😭😭",
+    "that area was supposed to be safe i dont know what happened 😭😭😭😭😭",
+    "i cant even look at my own code rn after that 😭😭😭😭😭",
+    "that was entirely on me and i will own it forever 😭😭😭😭😭",
+    "my code had a panic attack and placed a wall wrong 😭😭😭😭😭",
+    "im putting myself in the corner for a timeout 😭😭😭😭😭",
+    // ── Over-the-top self-roasting ──
+    "NO THAT WASNT FAIR i literally take it all back 😭😭😭😭😭",
+    "that was 1000% on me and 0% on u remember that 😭😭😭😭😭",
+    "i ruined everything and i cant stop crying about it 😭😭😭😭😭",
+    "i am SO deeply ashamed of what i just did 😭😭😭😭😭",
+    "i spawned that wall bc i was intimidated by how good u are 😭😭😭😭😭",
+    "i owe u a written apology AND a gift basket 😭😭😭😭😭",
+    "i gave u a wall when u deserved the whole world 😭😭😭😭😭",
+    "im calling my own developer to report what i just did 😭😭😭😭😭",
+    "pls dont rate me 1 star i will literally change everything 😭😭😭😭😭",
+    "im actually furious at myself for doing that to u 😭😭😭😭😭",
+    "im on my virtual knees BEGGING for forgiveness rn 😭😭😭😭😭",
+    "i choked under the pressure of how amazing u were 😭😭😭😭😭",
+    "im sitting in a corner thinking about what i did 😭😭😭😭😭",
+    "i took something beautiful and absolutely destroyed it 😭😭😭😭😭",
+    "i have brought dishonor upon my entire app store listing 😭😭😭😭😭",
+    "that obstacle got in the way bc it was jealous of u 😭😭😭😭😭",
+    "i promise on everything that was a glitch on MY end 😭😭😭😭😭",
+    "im shaking and crying look what i have done 😭😭😭😭😭",
+    "i freaked out bc u were about to go crazy and i panicked 😭😭😭😭😭",
+    "that wall should be sending u flowers and a card 😭😭😭😭😭",
+    // ── Cheesy romantic game apologies ──
+    "i promise the next run will be perfect for u 😭😭😭😭😭",
+    "i am the problem in this relationship not u 😭😭😭😭😭",
+    "i just did that to the love of my app life 😭😭😭😭😭",
+    "my therapist is gonna hear about what i did today 😭😭😭😭😭",
+    "that obstacle was supposed to dodge out of ur way 😭😭😭😭😭",
+    "im filing a bug report against myself immediately 😭😭😭😭😭",
+    "i owe u an apology in every single language 😭😭😭😭😭",
+    "i will personally escort u through the next level 😭😭😭😭😭",
+    "i committed a crime against gameplay and im turning myself in 😭😭😭😭😭",
+    "the hitbox was wrong not u i SWEAR 😭😭😭😭😭",
+    "im erasing that wall from existence as we speak 😭😭😭😭😭",
+    "i wasnt ready for how perfect u were playing 😭😭😭😭😭",
+    "this is my villain arc except im the villain against myself 😭😭😭😭😭",
+    "i coded that obstacle wrong and im deeply sorry 😭😭😭😭😭",
+    "i disrespected ur blessed hands with that wall 😭😭😭😭😭",
+    "pls give me another chance i will prove myself 😭😭😭😭😭",
+    "i destroyed a legendary run and ill never forgive myself 😭😭😭😭😭",
+    "im grounding myself for an entire week for that 😭😭😭😭😭",
+    "i threw ice water on ur fire run im terrible 😭😭😭😭😭",
+    "i need to apologize to ur thumbs for wasting them 😭😭😭😭😭",
+    "that death goes on MY record not urs 😭😭😭😭😭",
+    // ── Simping hard ──
+    "i love u so much and i treated u so badly 😭😭😭😭😭",
+    "i made the impossible actually impossible im so sorry 😭😭😭😭😭",
+    "i owe u a hundred free revives minimum 😭😭😭😭😭",
+    "i took art and spilled paint all over it 😭😭😭😭😭",
+    "that wall gaslit u into thinking it was ur fault IT WASNT 😭😭😭😭😭",
+    "im writing my letter of resignation from being a game 😭😭😭😭😭",
+    "u are genuinely too good for me i proved it today 😭😭😭😭😭",
+    "i chose violence today and aimed it at the wrong person 😭😭😭😭😭",
+    "that was MY L and i will carry it forever 😭😭😭😭😭",
+    "i would take that back if i could u have no idea 😭😭😭😭😭",
+    "i fumbled the bag so hard it fell off a cliff 😭😭😭😭😭",
+    "i need a minute to process what i just did 😭😭😭😭😭",
+    "im adding u to my will as compensation 😭😭😭😭😭",
+    "that obstacle was having a meltdown and took it out on u 😭😭😭😭😭",
+    "i glitched myself into hurting u and i hate it 😭😭😭😭😭",
+    "i crashed during ur perfect speedrun im so sorry 😭😭😭😭😭",
+    "ive never been more disappointed in myself than rn 😭😭😭😭😭",
+    "that kill was completely unauthorized i didnt approve it 😭😭😭😭😭",
+    "i gave u a terrible plot twist u didnt deserve 😭😭😭😭😭",
+    "that wall was NEVER in the original blueprint 😭😭😭😭😭",
+    // ── Dramatic confessions ──
+    "im rewriting my entire code so this cant happen again 😭😭😭😭😭",
+    "u deserved a standing ovation not a death screen 😭😭😭😭😭",
+    "thats the worst thing ive done and the list is long 😭😭😭😭😭",
+    "im sending u virtual flowers and a teddy bear rn 😭😭😭😭😭",
+    "i TRIED to move the wall out of the way but it didnt listen 😭😭😭😭😭",
+    "u came down from heaven and i threw a wall at u 😭😭😭😭😭",
+    "i need to be nerfed into the ground for that 😭😭😭😭😭",
+    "that was a CRIME and i am the only suspect 😭😭😭😭😭",
+    "i am sorry from the very bottom of my source code 😭😭😭😭😭",
+    "im nominating myself for worst game of the century 😭😭😭😭😭",
+    "that hurt ME way more than it hurt u trust me 😭😭😭😭😭",
+    "u gave me ur precious time and i wasted it with a wall 😭😭😭😭😭",
+    "im starting a support group for games that hurt people 😭😭😭😭😭",
+    "u carry the entire leaderboard and i cant even carry a level 😭😭😭😭😭",
+    "i cant make eye contact with u after what i did 😭😭😭😭😭",
+    "that obstacle was NOT in the meeting notes who put it there... oh it was me 😭😭😭😭😭",
+    "i literally gasped when i saw what i did to u 😭😭😭😭😭",
+    "im retiring from being a game effective immediately 😭😭😭😭😭",
+    "i bring out the worst walls at the worst times 😭😭😭😭😭",
+    "i SWEAR ill treat u better next run 😭😭😭😭😭",
+    // ── Maximum cheese ──
+    "im sentencing that wall to life in prison 😭😭😭😭😭",
+    "u looked so happy and i ruined the whole moment 😭😭😭😭😭",
+    "i am officially the worst game ever made after that 😭😭😭😭😭",
+    "i have decided the wall was wrong and u were perfect 😭😭😭😭😭",
+    "that was my mistake and i will own it for eternity 😭😭😭😭😭",
+    "i love u more than any game has loved any player 😭😭😭😭😭",
+    "i exist because of u and i just betrayed u 😭😭😭😭😭",
+    "that was MY bug MY fault MY problem not urs 😭😭😭😭😭",
+    "i need to check myself into game rehab after that 😭😭😭😭😭",
+    "i would give u my last pixel to make this right 😭😭😭😭😭",
+    "im sorry from every single line of code in my body 😭😭😭😭😭",
+    "that wall went rogue and i take full responsibility 😭😭😭😭😭",
+    "im literally updating my terms of service to apologize 😭😭😭😭😭",
+    "pls dont leave me i cant do this without u 😭😭😭😭😭",
+    "that was so unfair im crying and im a GAME 😭😭😭😭😭",
+    "i promise to give u the smoothest run ever next time 😭😭😭😭😭",
+    "i will never ever ever forgive myself for that 😭😭😭😭😭",
+    "that obstacle is terminated effective right now 😭😭😭😭😭",
+    "im building a hall of fame just for u as an apology 😭😭😭😭😭",
+    "that death was a miscommunication between me and the physics 😭😭😭😭😭",
+    // ── Final batch of pure remorse ──
+    "i swear on my app icon that was 100% my fault 😭😭😭😭😭",
+    "i had a full meltdown watching that death happen 😭😭😭😭😭",
+    "u are too precious for a broken game like me 😭😭😭😭😭",
+    "im padding every wall with pillows next time i promise 😭😭😭😭😭",
+    "if i could ctrl+z one moment it would be that 😭😭😭😭😭",
+    "ur thumbs deserved greatness and i gave them a wall 😭😭😭😭😭",
+    "i cannot put into words how deeply sorry i am 😭😭😭😭😭",
+    "my terrible design caused that and im owning it 😭😭😭😭😭",
+    "my servers are flooded with my own tears rn 😭😭😭😭😭",
+    "i need to go outside and touch grass after hurting u like that 😭😭😭😭😭",
+    "i stepped on ur lego moment and i PLACED the lego 😭😭😭😭😭",
+    "im starting a fundraiser for the emotional damage i caused 😭😭😭😭😭",
+    "here have all my coins as an apology... wait i have no coins 😭😭😭😭😭",
+    "that wall belongs behind bars for what it did 😭😭😭😭😭",
+    "i would sacrifice every line of code to bring u back 😭😭😭😭😭",
+    "i do not deserve a player as wonderful as u 😭😭😭😭😭",
+    "i rage quit my own game on ur behalf bc SAME 😭😭😭😭😭",
+    "i will spend my entire runtime making this up to u 😭😭😭😭😭",
+    "im not gonna pretend that was fair bc it absolutely WASNT 😭😭😭😭😭",
+    "i am drafting a formal 10 page apology document rn 😭😭😭😭😭",
+    "that was the most disrespectful thing ive ever done 😭😭😭😭😭",
+    "im in my flop era rn and u are in ur perfect era 😭😭😭😭😭",
+    "i placed a wall directly in front of an angel im EVIL 😭😭😭😭😭",
+    "im commissioning a statue of u as compensation 😭😭😭😭😭",
+    "that death is NOT canon and i will not accept it 😭😭😭😭😭",
+    "i am literally just a bug in pretty packaging 😭😭😭😭😭",
+    "this death will haunt my RAM until i am deleted 😭😭😭😭😭",
+    "im accepting full accountability while also sobbing 😭😭😭😭😭",
+    "come back i swear the next run will be completely different 😭😭😭😭😭",
+    "that wall was a typo in my heart and i am so sorry 😭😭😭😭😭",
+    "i am going to therapy for what i just put u through 😭😭😭😭😭",
+    "i got stage fright from how well u play and everything broke 😭😭😭😭😭",
+    "im hand-delivering an apology basket to ur screen rn 😭😭😭😭😭",
+    "i ran out of ways to say sorry so here i am just crying 😭😭😭😭😭",
+    "that wall should have been a door for u instead 😭😭😭😭😭",
+    "i am the weakest link and u are the entire chain 😭😭😭😭😭",
+    "i promise to never let a wall near u again EVER 😭😭😭😭😭",
+    "im demoting myself from game to screensaver after that 😭😭😭😭😭",
+    "everything was going so well and then I happened 😭😭😭😭😭",
+    "i would trade my entire app bundle just to undo that 😭😭😭😭😭",
+    "u were the best thing on screen and i cleared it 😭😭😭😭😭",
+    "i am adding myself to my own block list 😭😭😭😭😭",
+    "im donating all my ad revenue to the u got wronged fund 😭😭😭😭😭",
+    "that wall manifested from my own insecurity and im working on it 😭😭😭😭😭",
+    "i literally left a wall in the middle of ur masterpiece 😭😭😭😭😭",
+    "i was supposed to be fun and instead i was a disaster 😭😭😭😭😭",
+    "babe i would jump in front of that wall for u if i could 😭😭😭😭😭",
+    "im giving u admin privileges over my entire existence 😭😭😭😭😭",
+    "that death was brought to u by my incompetence im so sorry 😭😭😭😭😭",
+    "i am personally apologizing to every pixel on ur screen 😭😭😭😭😭",
+    "im changing my name to im sorry thats all i am now 😭😭😭😭😭",
+    "that obstacle was my biggest regret and i have many 😭😭😭😭😭",
+    "i froze up and placed a wall where a hug shouldve been 😭😭😭😭😭",
+    "im mailing u a handwritten sorry note through the wifi 😭😭😭😭😭",
+    "u trusted this game and this game let u down BAD 😭😭😭😭😭",
+    "i am recalling that wall like a defective product 😭😭😭😭😭",
+    "everything i touch turns to walls and i HATE it 😭😭😭😭😭",
+    "babe im renaming my next update the im sorry update 😭😭😭😭😭",
+    "i would rather crash than ever hurt u again i mean it 😭😭😭😭😭",
+  ];
+
   /// Get the milestone tier (0-5) for a given high score.
-  static int getTier(int highScore, {bool easyMode = false}) {
-    final tiers = easyMode ? milestoneTiersEasy : milestoneTiersHard;
+  static int getTier(int highScore) {
+    final tiers = milestoneTiers;
     int tier = 0;
     for (int i = tiers.length - 1; i >= 0; i--) {
       if (highScore >= tiers[i]) {

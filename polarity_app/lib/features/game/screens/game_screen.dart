@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:polarity/features/game/engine/game_engine.dart';
 import 'package:polarity/features/game/painters/game_painter.dart';
 import 'package:polarity/features/death/screens/death_screen.dart';
+import 'package:polarity/core/constants.dart';
 import 'package:polarity/providers/providers.dart';
 import 'package:polarity/services/audio_service.dart';
 import 'package:polarity/services/haptic_service.dart';
@@ -33,6 +35,34 @@ class _GameScreenState extends ConsumerState<GameScreen>
   bool _pauseDialogActionInProgress = false;
   int _lastTutorialBucket = -1;
   bool _cachedPainterIsDark = true;
+  bool _lastTutorialInteracted = false;
+
+  // Easter egg: Fisher-Yates shuffled deck for no-repeat messages
+  final Random _easterEggRng = Random();
+  late List<int> _easterEggDeck = _buildEasterEggDeck();
+  int _easterEggCursor = 0;
+
+  List<int> _buildEasterEggDeck() {
+    final deck = List<int>.generate(
+      GameConstants.easterEggDeathMessages.length, (i) => i,
+    );
+    deck.shuffle(_easterEggRng);
+    return deck;
+  }
+
+  String _getEasterEggMessage() {
+    if (_easterEggCursor >= _easterEggDeck.length) {
+      final lastShown = _easterEggDeck.last;
+      _easterEggDeck = _buildEasterEggDeck();
+      if (_easterEggDeck.first == lastShown && _easterEggDeck.length > 1) {
+        final swapIdx = 1 + _easterEggRng.nextInt(_easterEggDeck.length - 1);
+        _easterEggDeck[0] = _easterEggDeck[swapIdx];
+        _easterEggDeck[swapIdx] = lastShown;
+      }
+      _easterEggCursor = 0;
+    }
+    return GameConstants.easterEggDeathMessages[_easterEggDeck[_easterEggCursor++]];
+  }
 
   // Fixed-step simulation gives stable physics and smoother pacing under load.
   static const double _fixedTimeStep = 1.0 / 120.0;
@@ -65,7 +95,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _engine.init(size.width, size.height);
 
       final storage = ref.read(storageServiceProvider);
-      final shouldTutor = storage.isFirstLaunch || storage.getHighScore() < 3;
+      final shouldTutor = storage.isFirstLaunch || storage.getHighScore() < 5;
       _engine.configureTutorial(shouldTutor);
       if (storage.isFirstLaunch) storage.setFirstLaunchDone();
 
@@ -135,6 +165,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
     if (_engine.state == GameState.dead && !_deathFlowStarted) {
       _deathFlowStarted = true;
       _onDeath();
+    }
+
+    // Tutorial interaction changed — rebuild to swap tutorial text
+    if (_engine.tutorialHasInteracted != _lastTutorialInteracted) {
+      _lastTutorialInteracted = _engine.tutorialHasInteracted;
+      rebuildHud = true;
     }
 
     // Shield event polling
@@ -226,25 +262,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
     if (_engine.isNewHighScore) {
       storage.setHighScore(_engine.highScore);
-      storage.setHighScoreMode(_engine.easyMode);
       if (_engine.shouldRequestReview) {
         ref.read(reviewServiceProvider).requestReviewIfEligible();
       }
     }
 
-    final isEasyRun = _engine.easyMode;
-    final modeBest = isEasyRun
-        ? storage.leaderboardBestEasyScore
-        : storage.leaderboardBestHardScore;
+    final modeBest = storage.leaderboardBestScore;
     if (_engine.score > modeBest) {
-      if (isEasyRun) {
-        storage.setLeaderboardBestEasyScore(_engine.score);
-      } else {
-        storage.setLeaderboardBestHardScore(_engine.score);
-      }
+      storage.setLeaderboardBestScore(_engine.score);
       ref
           .read(leaderboardServiceProvider)
-          .submitScore(_engine.score, easyMode: isEasyRun);
+          .submitScore(_engine.score);
     }
 
     // V2: Persist tier if upgraded — Bug fix 3: consume immediately
@@ -289,6 +317,19 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _ticker.muted = true;
     final deathMessage = _engine.getDeathMessage();
     final isPraise = _engine.lastMessageWasPraise;
+
+    // Easter egg override: cheesy self-blame messages
+    final easterEggActive = ref.read(easterEggActiveProvider);
+    final String finalMessage;
+    final bool finalIsPraise;
+    if (easterEggActive) {
+      finalMessage = _getEasterEggMessage();
+      finalIsPraise = true;
+    } else {
+      finalMessage = deathMessage;
+      finalIsPraise = isPraise;
+    }
+
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: true,
@@ -296,15 +337,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
           score: _engine.score,
           highScore: _engine.highScore,
           isNewHighScore: _engine.isNewHighScore,
-          deathMessage: deathMessage,
-          isPraise: isPraise,
+          deathMessage: finalMessage,
+          isPraise: finalIsPraise,
           hasRevivedThisRun: _engine.hasRevivedThisRun,
           onRestart: _restart,
           onRevive: _revive,
           isSessionBest: _engine.isSessionBest && !_engine.isNewHighScore,
           tierJustUnlocked: tierUp,
           currentTier: _engine.currentTier,
-          easyMode: _engine.easyMode,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -323,7 +363,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _lastPhase = -1;
 
     final storage = ref.read(storageServiceProvider);
-    final shouldTutor = storage.getHighScore() < 3;
+    final shouldTutor = storage.getHighScore() < 5;
     _engine.configureTutorial(shouldTutor);
 
     _engine.startGame();
@@ -503,23 +543,74 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
           const Spacer(),
 
-          // Tutorial text
-          if (_engine.showTutorial && _engine.state == GameState.playing)
+          // Tutorial: full instructions before first tap
+          if (_engine.showTutorial && _engine.state == GameState.playing && !_engine.tutorialHasInteracted)
             Opacity(
               opacity: _engine.tutorialOpacity,
-              child: SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'HOLD TO PULL RIGHT\nRELEASE TO PULL LEFT',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w300,
-                    color: fgColor.withValues(alpha: 0.25),
-                    letterSpacing: 2,
-                    height: 2.0,
-                  ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'TAP TO START',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w400,
+                        color: fgColor.withValues(alpha: 0.6),
+                        letterSpacing: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _tutorialPoint('HOLD', 'PULL RIGHT', fgColor),
+                        const SizedBox(width: 32),
+                        _tutorialPoint('RELEASE', 'PULL LEFT', fgColor),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: fgColor.withValues(alpha: 0.15),
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'AVOID WALLS & OBSTACLES',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w300,
+                          color: fgColor.withValues(alpha: 0.35),
+                          letterSpacing: 3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Tutorial: controls hint after tap, fades at score 5
+          if (_engine.showTutorial && _engine.state == GameState.playing && _engine.tutorialHasInteracted)
+            Opacity(
+              opacity: _engine.tutorialOpacity,
+              child: Text(
+                'HOLD \u2192 RIGHT    RELEASE \u2192 LEFT',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w300,
+                  color: fgColor.withValues(alpha: 0.3),
+                  letterSpacing: 2,
                 ),
               ),
             ),
@@ -528,6 +619,35 @@ class _GameScreenState extends ConsumerState<GameScreen>
           SizedBox(height: bottomPad + 16),
         ],
       ),
+    );
+  }
+
+  Widget _tutorialPoint(String action, String result, Color fgColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          action,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            color: fgColor.withValues(alpha: 0.5),
+            letterSpacing: 3,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          result,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 11,
+            fontWeight: FontWeight.w300,
+            color: fgColor.withValues(alpha: 0.3),
+            letterSpacing: 2,
+          ),
+        ),
+      ],
     );
   }
 

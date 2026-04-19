@@ -14,7 +14,6 @@ class DeathScreen extends ConsumerStatefulWidget {
   final bool isSessionBest;
   final bool tierJustUnlocked;
   final int currentTier;
-  final bool easyMode;
   final bool hasRevivedThisRun;
   final VoidCallback onRestart;
   final VoidCallback onRevive;
@@ -29,7 +28,6 @@ class DeathScreen extends ConsumerStatefulWidget {
     required this.isSessionBest,
     required this.tierJustUnlocked,
     required this.currentTier,
-    required this.easyMode,
     required this.hasRevivedThisRun,
     required this.onRestart,
     required this.onRevive,

@@ -7,6 +7,16 @@ import 'package:polarity/features/settings/screens/settings_screen.dart';
 import 'package:polarity/core/constants.dart';
 import 'package:polarity/providers/providers.dart';
 
+// Easter egg tap reaction pools (by tap number)
+const _easterEggReactions = <int, List<String>>{
+  1: ['😩', '😏', '😩', '😏'],
+  2: ['😩 ahh', 'ooh 😏', '😩😩', 'hmm 😏'],
+  3: ['😩 one more pleaseeee', 'dont stop 😏', 'keep going 😩', 'ur onto something 😏'],
+  4: ['almost 😏', 'so close 😩', 'almost there 😏', 'nearly 😩'],
+  5: ['just a lil more 😩', 'patience 😏', 'nearly 😏', 'cmon cmon 😩'],
+  6: ['ONE MORE 😩', 'do it 😏', 'im ready 😩', 'RIGHT THERE 😏'],
+};
+
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
 
@@ -21,6 +31,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   double _buttonsOpacity = 0;
   bool _navActionInProgress = false;
 
+  // Easter egg tap tracking
+  int _easterEggTaps = 0;
+  bool _easterEggDone = false;
+  final _easterEggRng = Random();
+  OverlayEntry? _reactionOverlay;
+
   // Repaint notifier drives ONLY the background painter, no widget rebuild
   final _bgNotifier = _MenuBgNotifier();
 
@@ -29,6 +45,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
     super.initState();
     _ticker = createTicker(_onTick);
     _ticker.start();
+
+    // Reset easter egg on fresh menu screen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(easterEggActiveProvider.notifier).state = false;
+    });
 
     // Staggered fade-in
     Future.delayed(const Duration(milliseconds: 200), () {
@@ -48,6 +69,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   void dispose() {
     _ticker.dispose();
     _bgNotifier.dispose();
+    _reactionOverlay?.remove();
+    _reactionOverlay = null;
     super.dispose();
   }
 
@@ -93,14 +116,18 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                     curve: Curves.easeOut,
                     child: Column(
                       children: [
-                        Text(
-                          'POLARITY',
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 42,
-                            fontWeight: FontWeight.w100,
-                            color: fgColor,
-                            letterSpacing: 12,
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _onEasterEggTap,
+                          child: Text(
+                            'POLARITY',
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 42,
+                              fontWeight: FontWeight.w100,
+                              color: fgColor,
+                              letterSpacing: 12,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -205,9 +232,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                                     .selectionClick();
                                 await ref
                                     .read(leaderboardServiceProvider)
-                                    .showLeaderboard(
-                                      easyMode: ref.read(easyModeProvider),
-                                    );
+                                    .showLeaderboard();
                                 if (mounted) {
                                   _navActionInProgress = false;
                                 }
@@ -259,6 +284,43 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
         ),
       ),
     );
+  }
+
+  void _onEasterEggTap() {
+    if (_easterEggDone) return;
+
+    _easterEggTaps++;
+    ref.read(hapticServiceProvider).selectionClick();
+
+    String reaction;
+    if (_easterEggTaps >= 7) {
+      reaction = 'ilysm';
+      _easterEggDone = true;
+      ref.read(easterEggActiveProvider.notifier).state = true;
+    } else {
+      final pool = _easterEggReactions[_easterEggTaps] ?? _easterEggReactions[6]!;
+      reaction = pool[_easterEggRng.nextInt(pool.length)];
+    }
+
+    _showReaction(reaction);
+  }
+
+  void _showReaction(String text) {
+    _reactionOverlay?.remove();
+    _reactionOverlay = null;
+
+    final isDark = ref.read(isDarkThemeProvider);
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (context) => _EasterEggReaction(text: text, isDark: isDark),
+    );
+    _reactionOverlay = entry;
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      entry.remove();
+      if (_reactionOverlay == entry) _reactionOverlay = null;
+    });
   }
 
   void _startGame() {
@@ -365,4 +427,81 @@ class _MenuBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MenuBackgroundPainter oldDelegate) =>
       oldDelegate.color != color;
+}
+
+class _EasterEggReaction extends StatefulWidget {
+  final String text;
+  final bool isDark;
+  const _EasterEggReaction({required this.text, required this.isDark});
+
+  @override
+  State<_EasterEggReaction> createState() => _EasterEggReactionState();
+}
+
+class _EasterEggReactionState extends State<_EasterEggReaction>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacity;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _opacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1, end: 1), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 30),
+    ]).animate(_controller);
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.5, end: 1.1), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.1, end: 1.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 70),
+    ]).animate(_controller);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).size.height * 0.32,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: ListenableBuilder(
+          listenable: _controller,
+          builder: (context, child) => Opacity(
+            opacity: _opacity.value,
+            child: Transform.scale(
+              scale: _scale.value,
+              child: child,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              widget.text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 20,
+                fontWeight: FontWeight.w400,
+                color: widget.isDark ? Colors.white70 : Colors.black87,
+                letterSpacing: 2,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

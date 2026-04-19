@@ -79,11 +79,9 @@ Future<void> main() async {
   // Load high score and difficulty into engine
   final engine = container.read(gameEngineProvider);
   engine.highScore = storage.getHighScore();
-  engine.easyMode = storage.easyMode;
   engine.eliteUnlocked = storage.isEliteUnlocked;
   engine.currentTier = storage.milestoneTier;
   engine.previousTier = engine.currentTier;
-  engine.highScoreMode = storage.highScoreIsEasyMode;
   engine.deserializeThemeRotations(storage.themeRotationsJson);
   ScoreGuard.setHighScore(engine.highScore);
 

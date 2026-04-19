@@ -72,10 +72,6 @@ final adsEnabledProvider = StateProvider<bool>((ref) {
   return ref.read(storageServiceProvider).adsEnabled;
 });
 
-final easyModeProvider = StateProvider<bool>((ref) {
-  return ref.read(storageServiceProvider).easyMode;
-});
-
 final rememberThemeAcrossLaunchesProvider = StateProvider<bool>((ref) {
   return ref.read(storageServiceProvider).rememberThemeAcrossLaunches;
 });
@@ -90,3 +86,6 @@ final milestoneTierProvider = StateProvider<int>((ref) {
 
 // V6: Reactive rewarded ad readiness — death screen watches this
 final rewardedAdReadyProvider = StateProvider<bool>((ref) => false);
+
+// Easter egg: activated by tapping POLARITY title 7 times, session-only
+final easterEggActiveProvider = StateProvider<bool>((ref) => false);

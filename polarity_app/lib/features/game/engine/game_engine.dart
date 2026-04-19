@@ -53,6 +53,7 @@ class GameEngine {
   // Just a text overlay; magnets work normally so user can play
   bool showTutorial = false;
   double tutorialOpacity = 0;
+  bool tutorialHasInteracted = false;
 
   // Shield mechanic
   bool hasShield = false;
@@ -72,9 +73,6 @@ class GameEngine {
   // Squash/stretch factor based on velocity
   double squashStretch = 1.0;
 
-  // Easy mode: walls don't kill (player bounces off)
-  bool easyMode = false;
-
   // Debug invincibility (only for debug builds)
   bool debugInvincible = false;
 
@@ -86,9 +84,6 @@ class GameEngine {
 
   // V3: Score at revive — prevents stale near-high-score after revive
   int _scoreAtRevive = 0;
-
-  // V3: Mode in which high score was set — prevents cross-mode tier inflation
-  bool highScoreMode = false; // true = easy
 
   // ── Premium VFX state ──
 
@@ -251,9 +246,11 @@ class GameEngine {
     if (shouldShow) {
       showTutorial = true;
       tutorialOpacity = 1.0;
+      tutorialHasInteracted = false;
     } else {
       showTutorial = false;
       tutorialOpacity = 0;
+      tutorialHasInteracted = true;
     }
   }
 
@@ -410,13 +407,23 @@ class GameEngine {
   }
 
   void _updatePlaying(double dt) {
+    // Tutorial: freeze gameplay until first tap, but keep ball visually alive
+    if (showTutorial && !tutorialHasInteracted) {
+      if (isTouching) {
+        tutorialHasInteracted = true;
+      } else {
+        player.glowPhase += dt * 2.5;
+        return;
+      }
+    }
+
     gameTime += dt;
     final speedMult = _getSpeedMultiplier();
     final magnetMult = _getMagnetMultiplier();
 
     magnetPhase += dt * 8;
 
-    // ── Horizontal physics (always active, even during tutorial) ──
+    // ── Horizontal physics ──
     final magnetForce = GameConstants.baseMagnetForce * magnetMult;
     if (isTouching) {
       player.velocityX += magnetForce * dt;
@@ -451,16 +458,8 @@ class GameEngine {
     final pr = GameConstants.playerRadius;
     if (!isInvincible && !debugInvincible) {
       if (player.x - pr <= 0 || player.x + pr >= screenWidth) {
-        if (easyMode) {
-          // Easy mode: wall just stops the ball (magnet holds it there).
-          // Player switches input to pull away.
-          player.x = player.x.clamp(pr + 1, screenWidth - pr - 1);
-          player.velocityX = 0;
-        } else {
-          // Hard mode: wall = death
-          _handleHit();
-          return; // skip rest of update — player is dead
-        }
+        _handleHit();
+        return; // skip rest of update — player is dead
       }
     }
     // Always clamp inside walls (safety net)
@@ -877,7 +876,6 @@ class GameEngine {
       highScore = score;
       ScoreGuard.setHighScore(highScore);
       _newHighScoreThisRun = true;
-      highScoreMode = easyMode; // Bug fix 2: track mode for tier calc
     }
 
     // V2: Session best
@@ -888,9 +886,9 @@ class GameEngine {
       isSessionBest = false;
     }
 
-    // V2: Tier check — use highScoreMode (not current easyMode) to prevent cross-mode inflation
+    // V2: Tier check
     if (score == highScore && score > 0) {
-      final newTier = GameConstants.getTier(highScore, easyMode: highScoreMode);
+      final newTier = GameConstants.getTier(highScore);
       if (newTier > currentTier) {
         previousTier = currentTier;
         currentTier = newTier;
@@ -1281,9 +1279,7 @@ class GameEngine {
     final trollMsg = trollSystem.getTrollDeathMessage();
     if (trollMsg != null) return trollMsg;
 
-    final threshold = easyMode
-        ? GameConstants.praiseThresholdEasy
-        : GameConstants.praiseThresholdHard;
+    final threshold = GameConstants.praiseThreshold;
     if (score >= threshold) {
       return _getRandomPraise();
     }
@@ -1294,9 +1290,7 @@ class GameEngine {
   /// V4: Troll rage-bait messages are never praise.
   bool get lastMessageWasPraise {
     if (trollSystem.diedDuringTroll) return false;
-    final threshold = easyMode
-        ? GameConstants.praiseThresholdEasy
-        : GameConstants.praiseThresholdHard;
+    final threshold = GameConstants.praiseThreshold;
     return score >= threshold;
   }
 
