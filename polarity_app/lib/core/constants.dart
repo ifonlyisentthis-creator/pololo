@@ -200,7 +200,7 @@ class GameConstants {
     "nah that was personal. u hurt me with that one 😭😭😭😭😭",
     "NO NO NO NO NO NO NO NO 😂😂😂😂😂😂😂",
     "u played that with ur FEET??? 😂😂😂😂😂😂😂",
-    "if i could rage quit MY OWN game right now i would 😭😭😭😭😭😭",
+    "if i could uninstall myself from UR phone specifically i would 😭😭😭😭😭😭",
     "genuinely asking: have u played a game before. any game. ever 😂😂😂😂",
     "u died so fast i thought the app crashed 😂😂😂😂😂",
     "WHY DO U KEEP COMING BACK 😂😂😂😂😂😂😂😂",
