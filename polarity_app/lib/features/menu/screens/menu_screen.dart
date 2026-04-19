@@ -9,12 +9,12 @@ import 'package:polarity/providers/providers.dart';
 
 // Easter egg tap reaction pools (by tap number)
 const _easterEggReactions = <int, List<String>>{
-  1: ['😩', '😏', '😩', '😏'],
-  2: ['😩 ahh', 'ooh 😏', '😩😩', 'hmm 😏'],
-  3: ['😩 one more pleaseeee', 'dont stop 😏', 'keep going 😩', 'ur onto something 😏'],
-  4: ['almost 😏', 'so close 😩', 'almost there 😏', 'nearly 😩'],
-  5: ['just a lil more 😩', 'patience 😏', 'nearly 😏', 'cmon cmon 😩'],
-  6: ['ONE MORE 😩', 'do it 😏', 'im ready 😩', 'RIGHT THERE 😏'],
+  1: ['hmm 😏', 'wait 😏', '👀', '🤔'],
+  2: ['ooh whats this 😏', 'hmm interesting 😏', 'curious 👀', 'wait wait 🤔'],
+  3: ['ur onto something 😏', 'keep tapping 👀', 'u found something 😏', 'ooh getting warmer 🤔'],
+  4: ['almost found it 😏', 'so close 👀', 'getting warmer 😏', 'nearly there 🤔'],
+  5: ['almost 😏', 'just a few more 👀', 'patience 😏', 'cmon cmon 🤔'],
+  6: ['ONE MORE 😏', 'this is it 👀', 'final tap 😏', 'HERE IT COMES 🤔'],
 };
 
 class MenuScreen extends ConsumerStatefulWidget {
