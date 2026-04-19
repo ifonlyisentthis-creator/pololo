@@ -9,12 +9,12 @@ import 'package:polarity/providers/providers.dart';
 
 // Easter egg tap reaction pools (by tap number)
 const _easterEggReactions = <int, List<String>>{
-  1: ['hmm 😏', 'wait 😏', '👀', '🤔'],
-  2: ['ooh whats this 😏', 'hmm interesting 😏', 'curious 👀', 'wait wait 🤔'],
-  3: ['ur onto something 😏', 'keep tapping 👀', 'u found something 😏', 'ooh getting warmer 🤔'],
-  4: ['almost found it 😏', 'so close 👀', 'getting warmer 😏', 'nearly there 🤔'],
-  5: ['almost 😏', 'just a few more 👀', 'patience 😏', 'cmon cmon 🤔'],
-  6: ['ONE MORE 😏', 'this is it 👀', 'final tap 😏', 'HERE IT COMES 🤔'],
+  1: ['hmm 🤔', 'wait 👀', '👀', '🤔'],
+  2: ['ooh whats this 🤔', 'hmm interesting 👀', 'curious 🧐', 'wait wait 👀'],
+  3: ['ur onto something 🧐', 'keep tapping 👀', 'u found something 🤔', 'getting warmer 🧐'],
+  4: ['not far now 🤔', 'few more 👀', 'keep going 🧐', 'almost found it 👀'],
+  5: ['just a lil more 🤔', 'patience 🧐', 'so persistent 👀', 'dedicated 🤔'],
+  6: ['ONE MORE 👀', 'this is it 🤔', 'final tap 🧐', 'LAST ONE 👀'],
 };
 
 class MenuScreen extends ConsumerStatefulWidget {
@@ -35,7 +35,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   int _easterEggTaps = 0;
   bool _easterEggDone = false;
   final _easterEggRng = Random();
-  OverlayEntry? _reactionOverlay;
+  String? _reactionText;
 
   // Repaint notifier drives ONLY the background painter, no widget rebuild
   final _bgNotifier = _MenuBgNotifier();
@@ -69,8 +69,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   void dispose() {
     _ticker.dispose();
     _bgNotifier.dispose();
-    _reactionOverlay?.remove();
-    _reactionOverlay = null;
     super.dispose();
   }
 
@@ -136,7 +134,26 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                           height: 1,
                           color: fgColor.withValues(alpha: 0.2),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
+                        // Easter egg reaction (inline, below divider)
+                        AnimatedOpacity(
+                          opacity: _reactionText != null ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: SizedBox(
+                            height: 28,
+                            child: Text(
+                              _reactionText ?? '',
+                              style: TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w400,
+                                color: fgColor.withValues(alpha: 0.6),
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         if (highScore > 0)
                           Text(
                             'BEST: $highScore',
@@ -306,20 +323,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   }
 
   void _showReaction(String text) {
-    _reactionOverlay?.remove();
-    _reactionOverlay = null;
-
-    final isDark = ref.read(isDarkThemeProvider);
-    final overlay = Overlay.of(context);
-    final entry = OverlayEntry(
-      builder: (context) => _EasterEggReaction(text: text, isDark: isDark),
-    );
-    _reactionOverlay = entry;
-    overlay.insert(entry);
+    setState(() => _reactionText = text);
 
     Future.delayed(const Duration(milliseconds: 1200), () {
-      entry.remove();
-      if (_reactionOverlay == entry) _reactionOverlay = null;
+      if (mounted && _reactionText == text) {
+        setState(() => _reactionText = null);
+      }
     });
   }
 
@@ -427,81 +436,4 @@ class _MenuBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MenuBackgroundPainter oldDelegate) =>
       oldDelegate.color != color;
-}
-
-class _EasterEggReaction extends StatefulWidget {
-  final String text;
-  final bool isDark;
-  const _EasterEggReaction({required this.text, required this.isDark});
-
-  @override
-  State<_EasterEggReaction> createState() => _EasterEggReactionState();
-}
-
-class _EasterEggReactionState extends State<_EasterEggReaction>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _opacity;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _opacity = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 1, end: 1), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 30),
-    ]).animate(_controller);
-    _scale = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.5, end: 1.1), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 1.1, end: 1.0), weight: 10),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 70),
-    ]).animate(_controller);
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: MediaQuery.of(context).size.height * 0.32,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        child: ListenableBuilder(
-          listenable: _controller,
-          builder: (context, child) => Opacity(
-            opacity: _opacity.value,
-            child: Transform.scale(
-              scale: _scale.value,
-              child: child,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              widget.text,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 20,
-                fontWeight: FontWeight.w400,
-                color: widget.isDark ? Colors.white70 : Colors.black87,
-                letterSpacing: 2,
-                decoration: TextDecoration.none,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
