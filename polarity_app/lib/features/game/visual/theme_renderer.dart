@@ -254,78 +254,70 @@ class ThemeRenderer {
         ? theme.magnetColors[1]
         : color;
 
-    // Position-based: nearest wall
+    // Always connect to the wall the player is being pulled toward
+    final wallX = isTouching ? size.width : 0.0;
     final half = size.width / 2;
     final nearLeft = playerX < half;
-    final wallX = nearLeft ? 0.0 : size.width;
-    final distToWall = nearLeft ? playerX : size.width - playerX;
-    final proximity = (1.0 - distToWall / half).clamp(0.0, 1.0);
-    if (proximity < 0.15) return;
 
-    // Concentric pull arcs — only on left wall (right wall has tendrils only)
+    // Concentric pull arcs — only on left wall
     if (nearLeft) {
-      _strokePaint
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..maskFilter = null;
-      const pi = 3.14159265;
-      for (int i = 0; i < 4; i++) {
-        final cycle = (gameTime * 0.8 + i * 0.785) % pi;
-        final arcRadius = 60.0 * (1.0 - cycle / pi);
-        final arcAlpha = sin(cycle) * 0.25 * proximity;
-        if (arcAlpha < 0.01 || arcRadius < 2.0) continue;
-        _strokePaint.color = color.withValues(alpha: arcAlpha);
-        canvas.drawArc(
-          Rect.fromCircle(center: Offset(wallX, playerY), radius: arcRadius),
-          -pi / 2,
-          -pi,
-          false,
-          _strokePaint,
-        );
+      final distToWall = playerX;
+      final proximity = (1.0 - distToWall / half).clamp(0.0, 1.0);
+      if (proximity >= 0.15) {
+        _strokePaint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..maskFilter = null;
+        const pi = 3.14159265;
+        for (int i = 0; i < 4; i++) {
+          final cycle = (gameTime * 0.8 + i * 0.785) % pi;
+          final arcRadius = 60.0 * (1.0 - cycle / pi);
+          final arcAlpha = sin(cycle) * 0.25 * proximity;
+          if (arcAlpha < 0.01 || arcRadius < 2.0) continue;
+          _strokePaint.color = color.withValues(alpha: arcAlpha);
+          canvas.drawArc(
+            Rect.fromCircle(center: Offset(0.0, playerY), radius: arcRadius),
+            -pi / 2,
+            -pi,
+            false,
+            _strokePaint,
+          );
+        }
       }
     }
 
-    // Two premium energy tendrils with gradient + glow
-    for (int i = 0; i < 2; i++) {
-      final phase = gameTime * 2.5 + i * 1.8;
-      final ySpread = (i == 0 ? 1.0 : -1.0) * 14.0;
-      final waveAmp = 25.0 + sin(phase * 0.7) * 10.0;
-      final yOffset = sin(phase) * waveAmp;
-      final midX = (wallX + playerX) / 2;
-      final midY = playerY + yOffset + ySpread;
+    // Three energy tendrils — always visible, wall-to-ball
+    for (int i = 0; i < 3; i++) {
+      final offset = (gameTime * 2.5 + i * 2.1) % (pi * 2);
+      final yOff = sin(offset) * 30;
+      final baseAlpha = (0.08 + sin(offset) * 0.04).clamp(0.0, 1.0);
 
       _linePath
         ..reset()
-        ..moveTo(wallX, playerY + ySpread)
-        ..quadraticBezierTo(midX, midY, playerX, playerY);
+        ..moveTo(wallX, playerY + yOff)
+        ..quadraticBezierTo(
+          (wallX + playerX) / 2, playerY + yOff + cos(offset) * 15,
+          playerX, playerY);
 
-      // Glow line underneath
+      // Glow
       canvas.drawPath(
         _linePath,
         _linePaint
-          ..color = glowColor.withValues(alpha: 0.08 * proximity)
+          ..color = glowColor.withValues(alpha: baseAlpha * 0.5)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 4.0
+          ..strokeWidth = 3.0
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
           ..shader = null,
       );
 
-      // Core tendril with gradient
-      final baseAlpha = (0.14 + sin(gameTime * 3.0 + i * 1.5).abs() * 0.10) * proximity;
+      // Core
       canvas.drawPath(
         _linePath,
         _linePaint
-          ..shader = ui.Gradient.linear(
-            Offset(wallX, playerY),
-            Offset(playerX, playerY),
-            [color.withValues(alpha: 0.0), color.withValues(alpha: baseAlpha)],
-            [0.0, 1.0],
-          )
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0
+          ..color = color.withValues(alpha: baseAlpha)
+          ..strokeWidth = 1.0
           ..maskFilter = null,
       );
-      _linePaint.shader = null;
     }
   }
 
