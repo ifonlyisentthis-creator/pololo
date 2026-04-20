@@ -712,9 +712,6 @@ class GameEngine {
         _checkMilestone();
         _checkThemeTransition();
         _updateNearHighScore();
-
-        // Score micro-burst particles at obstacle tip.
-        _spawnScoreParticles(obs);
       }
 
       if (obs.worldY >= -100) {
@@ -1069,24 +1066,6 @@ class GameEngine {
   void _spawnMagnetParticles(double dt) {
     // V7: Magnet particles removed — wall aura + arcs + tendrils replace them
     return;
-  }
-
-  void _spawnScoreParticles(Obstacle obs) {
-    final tipX = obs.fromLeft ? obs.width : screenWidth - obs.width;
-    final dir = obs.fromLeft ? 1.0 : -1.0;
-    for (int i = 0; i < 5; i++) {
-      trailParticles.add(
-        Particle(
-          x: tipX,
-          y: obs.worldY + (_rng.nextDouble() - 0.5) * obs.thickness,
-          velocityX: dir * (40 + _rng.nextDouble() * 60),
-          velocityY: (_rng.nextDouble() - 0.5) * 50,
-          life: 0.2 + _rng.nextDouble() * 0.15,
-          radius: 1.0 + _rng.nextDouble() * 1.0,
-          color: accentColor.withValues(alpha: 0.4),
-        ),
-      );
-    }
   }
 
   void _generateObstaclesIfNeeded() {

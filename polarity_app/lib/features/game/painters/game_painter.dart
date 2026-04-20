@@ -1100,6 +1100,9 @@ class GamePainter extends CustomPainter {
 
   // ── Magnet Aura (wall-anchored suction glow + inward-drifting arcs) ──
   void _drawMagnetAura(Canvas canvas, Size size) {
+    // When theme is active, ThemeRenderer.drawMagnetEffect handles this
+    if (engine.effectiveTheme != null) return;
+
     final px = engine.player.x;
     final py = engine.player.y;
     final half = size.width / 2;
