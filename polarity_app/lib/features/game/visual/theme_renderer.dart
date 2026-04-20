@@ -73,7 +73,8 @@ class ThemeRenderer {
         canvas.rotate(glowPhase * 2 * speed);
       case BallEffect.flicker:
         // Alpha handled elsewhere; slight scale flicker here.
-        final s = 1.0 + sin(glowPhase * 6 * speed) * 0.05;
+        final fs = speed > 1.5 ? 1.5 : speed; // Cap flicker speed
+        final s = 1.0 + sin(glowPhase * 6 * fs) * 0.05;
         canvas.scale(s, s);
       case BallEffect.breathe:
         final s = 1.0 + sin(glowPhase * 1.5 * speed) * 0.08;
@@ -249,29 +250,82 @@ class ThemeRenderer {
     final color = theme.magnetColors.isNotEmpty
         ? theme.magnetColors.first
         : theme.ballColors.first;
-    final wallX = isTouching ? size.width : 0.0;
+    final glowColor = theme.magnetColors.length > 1
+        ? theme.magnetColors[1]
+        : color;
 
-    // Draw 3 curved lines from wall to player.
-    for (int i = 0; i < 3; i++) {
-      final yOffset = sin(gameTime * 3 + i * 2.0) * 30;
+    // Position-based: nearest wall
+    final half = size.width / 2;
+    final nearLeft = playerX < half;
+    final wallX = nearLeft ? 0.0 : size.width;
+    final distToWall = nearLeft ? playerX : size.width - playerX;
+    final proximity = (1.0 - distToWall / half).clamp(0.0, 1.0);
+    if (proximity < 0.15) return;
+
+    // Concentric pull arcs — only on left wall (right wall has tendrils only)
+    if (nearLeft) {
+      _strokePaint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..maskFilter = null;
+      const pi = 3.14159265;
+      for (int i = 0; i < 4; i++) {
+        final cycle = (gameTime * 0.8 + i * 0.785) % pi;
+        final arcRadius = 60.0 * (1.0 - cycle / pi);
+        final arcAlpha = sin(cycle) * 0.25 * proximity;
+        if (arcAlpha < 0.01 || arcRadius < 2.0) continue;
+        _strokePaint.color = color.withValues(alpha: arcAlpha);
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(wallX, playerY), radius: arcRadius),
+          -pi / 2,
+          -pi,
+          false,
+          _strokePaint,
+        );
+      }
+    }
+
+    // Two premium energy tendrils with gradient + glow
+    for (int i = 0; i < 2; i++) {
+      final phase = gameTime * 2.5 + i * 1.8;
+      final ySpread = (i == 0 ? 1.0 : -1.0) * 14.0;
+      final waveAmp = 25.0 + sin(phase * 0.7) * 10.0;
+      final yOffset = sin(phase) * waveAmp;
       final midX = (wallX + playerX) / 2;
-      final midY = playerY + yOffset;
+      final midY = playerY + yOffset + ySpread;
 
       _linePath
         ..reset()
-        ..moveTo(wallX, playerY + (i - 1) * 20)
+        ..moveTo(wallX, playerY + ySpread)
         ..quadraticBezierTo(midX, midY, playerX, playerY);
 
+      // Glow line underneath
       canvas.drawPath(
         _linePath,
         _linePaint
-          ..color =
-              color.withValues(alpha: 0.06 + sin(gameTime * 4 + i).abs() * 0.06)
+          ..color = glowColor.withValues(alpha: 0.08 * proximity)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0
-          ..maskFilter = null
+          ..strokeWidth = 4.0
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
           ..shader = null,
       );
+
+      // Core tendril with gradient
+      final baseAlpha = (0.14 + sin(gameTime * 3.0 + i * 1.5).abs() * 0.10) * proximity;
+      canvas.drawPath(
+        _linePath,
+        _linePaint
+          ..shader = ui.Gradient.linear(
+            Offset(wallX, playerY),
+            Offset(playerX, playerY),
+            [color.withValues(alpha: 0.0), color.withValues(alpha: baseAlpha)],
+            [0.0, 1.0],
+          )
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0
+          ..maskFilter = null,
+      );
+      _linePaint.shader = null;
     }
   }
 

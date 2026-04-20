@@ -46,11 +46,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
     _ticker = createTicker(_onTick);
     _ticker.start();
 
-    // Reset easter egg on fresh menu screen
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(easterEggActiveProvider.notifier).state = false;
-    });
-
     // Staggered fade-in
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() => _titleOpacity = 1);
@@ -304,7 +299,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
   }
 
   void _onEasterEggTap() {
-    if (_easterEggDone) return;
+    if (_easterEggDone || ref.read(easterEggConsumedProvider)) return;
 
     _easterEggTaps++;
     ref.read(hapticServiceProvider).selectionClick();

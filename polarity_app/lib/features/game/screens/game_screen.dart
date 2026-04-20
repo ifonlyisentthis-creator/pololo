@@ -105,6 +105,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _engine.previousTier = _engine.currentTier;
 
       _engine.startGame();
+
+      // Start active-playtime clock for interstitial ad pacing
+      ref.read(adServiceProvider).resumePlayClock();
     });
   }
 
@@ -258,6 +261,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _audio.play('death');
     _haptics.heavyImpact();
 
+    // Pause active-playtime clock — death screen / ads don't count
+    ref.read(adServiceProvider).pausePlayClock();
+
     final storage = ref.read(storageServiceProvider);
 
     if (_engine.isNewHighScore) {
@@ -323,6 +329,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final String finalMessage;
     final bool finalIsPraise;
     if (easterEggActive) {
+      // Stay active for entire session — only reset on app restart.
+      // easterEggConsumed blocks re-trigger from menu tap.
+      ref.read(easterEggConsumedProvider.notifier).state = true;
       finalMessage = _getEasterEggMessage();
       finalIsPraise = true;
     } else {
@@ -370,6 +379,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _lastTime = Duration.zero;
     _accumulator = 0;
     if (mounted) setState(() {});
+
+    // Resume active-playtime clock for new game
+    ref.read(adServiceProvider).resumePlayClock();
   }
 
   void _revive() {
@@ -382,10 +394,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _lastTime = Duration.zero;
     _accumulator = 0;
     if (mounted) setState(() {});
+
+    // Resume active-playtime clock after revive
+    ref.read(adServiceProvider).resumePlayClock();
   }
 
   @override
   void dispose() {
+    ref.read(adServiceProvider).pausePlayClock();
     WidgetsBinding.instance.removeObserver(this);
     _ticker.dispose();
     _repaintNotifier.dispose();

@@ -105,7 +105,7 @@ class GamePainter extends CustomPainter {
     _drawAmbientParticles(canvas, size, theme);
     _drawObstacles(canvas, size, theme);
     _drawTrailParticles(canvas, size, theme);
-    _drawMagnetParticles(canvas, size);
+    _drawMagnetAura(canvas, size);
 
     if (engine.player.isAlive) {
       _drawMagnetLines(canvas, size, theme);
@@ -217,17 +217,25 @@ class GamePainter extends CustomPainter {
     final accent = visibleAccent;
     final intensity = engine.glowIntensitySeed;
 
-    // Invincibility rapid blink
+    // Invincibility smooth alpha pulse (always visible, premium phasing)
+    double invincAlpha = 1.0;
     if (engine.isInvincible) {
-      final blink = (sin(glow * 15) + 1) / 2;
-      if (blink < 0.3) return;
+      invincAlpha = 0.35 + 0.65 * ((sin(glow * 8) + 1) / 2);
     }
 
     // V3: Use theme renderer if theme is active
     if (theme != null) {
+      if (invincAlpha < 1.0) {
+        canvas.saveLayer(null, Paint()..color = Color.fromRGBO(0, 0, 0, invincAlpha));
+      }
       ThemeRenderer.drawBall(canvas, px, py, pr, theme,
           glow, intensity, stretch);
+      if (invincAlpha < 1.0) canvas.restore();
       return;
+    }
+
+    if (invincAlpha < 1.0) {
+      canvas.saveLayer(null, Paint()..color = Color.fromRGBO(0, 0, 0, invincAlpha));
     }
 
     canvas.save();
@@ -258,6 +266,8 @@ class GamePainter extends CustomPainter {
     }
 
     canvas.restore();
+
+    if (invincAlpha < 1.0) canvas.restore();
   }
 
   // Phase 1: Glowing Sphere
@@ -1010,26 +1020,49 @@ class GamePainter extends CustomPainter {
     final px = engine.player.x;
     final py = engine.player.y;
     final phase = engine.magnetPhase;
-    final wallX = engine.isTouching ? size.width : 0.0;
 
-    for (int i = 0; i < 3; i++) {
-      final offset = (phase + i * 2.1) % (pi * 2);
-      final yOff = sin(offset) * 30;
-      final alpha = (0.08 + sin(offset) * 0.04).clamp(0.0, 1.0);
+    // Position-based: nearest wall
+    final half = size.width / 2;
+    final nearLeft = px < half;
+    final wallX = nearLeft ? 0.0 : size.width;
+    final distToWall = nearLeft ? px : size.width - px;
+    final proximity = (1.0 - distToWall / half).clamp(0.0, 1.0);
+    if (proximity < 0.15) return;
+
+    for (int i = 0; i < 2; i++) {
+      final p = phase + i * 1.8;
+      final ySpread = (i == 0 ? 1.0 : -1.0) * 14.0;
+      final yOff = sin(p) * (25.0 + sin(p * 0.7) * 10.0);
+      final midX = (wallX + px) / 2;
+      final midY = py + yOff + ySpread;
+      final baseAlpha = (0.14 + sin(phase * 3.0 + i * 1.5).abs() * 0.10) * proximity;
 
       _linePath
         ..reset()
-        ..moveTo(wallX, py + yOff)
-        ..quadraticBezierTo(
-          (wallX + px) / 2, py + yOff + cos(offset) * 15, px, py);
+        ..moveTo(wallX, py + ySpread)
+        ..quadraticBezierTo(midX, midY, px, py);
 
+      // Glow
       _linePaint
-        ..color = visibleAccent.withValues(alpha: alpha)
+        ..color = visibleAccent.withValues(alpha: 0.08 * proximity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.0
-        ..maskFilter = null
+        ..strokeWidth = 4.0
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
         ..shader = null;
       canvas.drawPath(_linePath, _linePaint);
+
+      // Core with gradient
+      _linePaint
+        ..shader = ui.Gradient.linear(
+          Offset(wallX, py),
+          Offset(px, py),
+          [visibleAccent.withValues(alpha: 0.0), visibleAccent.withValues(alpha: baseAlpha)],
+          [0.0, 1.0],
+        )
+        ..strokeWidth = 2.0
+        ..maskFilter = null;
+      canvas.drawPath(_linePath, _linePaint);
+      _linePaint.shader = null;
     }
   }
 
@@ -1065,26 +1098,41 @@ class GamePainter extends CustomPainter {
     }
   }
 
-  // ── Magnet Particles (glow without GPU blur) ──
-  void _drawMagnetParticles(Canvas canvas, Size size) {
-    const margin = 32.0;
-    final minX = -margin;
-    final maxX = size.width + margin;
-    final minY = -margin;
-    final maxY = size.height + margin;
+  // ── Magnet Aura (wall-anchored suction glow + inward-drifting arcs) ──
+  void _drawMagnetAura(Canvas canvas, Size size) {
+    final px = engine.player.x;
+    final py = engine.player.y;
+    final half = size.width / 2;
+    final nearLeft = px < half;
+    final wallX = nearLeft ? 0.0 : size.width;
+    final distToWall = nearLeft ? px : size.width - px;
+    final proximity = (1.0 - distToWall / half).clamp(0.0, 1.0);
+    if (proximity < 0.15) return;
 
-    final particles = engine.magnetParticles;
-    for (int i = 0; i < particles.length; i++) {
-      final p = particles[i];
-      if (p.isDead) continue;
-      if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) continue;
-      final alpha = (p.life / p.maxLife).clamp(0.0, 1.0);
-      final r = p.radius * alpha;
-      if (r <= 0) continue;
-      _glowPaint.color = p.color.withValues(alpha: alpha * 0.15);
-      canvas.drawCircle(Offset(p.x, p.y), r * 2.5, _glowPaint);
-      _fillPaint.color = p.color.withValues(alpha: alpha * 0.7);
-      canvas.drawCircle(Offset(p.x, p.y), r, _fillPaint);
+    final phase = engine.magnetPhase;
+
+    // Concentric pull arcs — only on left wall (right wall has tendrils only)
+    if (nearLeft) {
+      _linePaint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..maskFilter = null
+        ..shader = null;
+      const pi = 3.14159265;
+      for (int i = 0; i < 4; i++) {
+        final cycle = (phase * 0.8 + i * 0.785) % pi;
+        final arcRadius = 60.0 * (1.0 - cycle / pi);
+        final arcAlpha = sin(cycle) * 0.25 * proximity;
+        if (arcAlpha < 0.01 || arcRadius < 2.0) continue;
+        _linePaint.color = visibleAccent.withValues(alpha: arcAlpha);
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset(wallX, py), radius: arcRadius),
+          -pi / 2,
+          -pi,
+          false,
+          _linePaint,
+        );
+      }
     }
   }
 

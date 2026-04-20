@@ -258,6 +258,34 @@ class SettingsScreen extends ConsumerWidget {
 
                       const SizedBox(height: 40),
 
+                      // Manage Ad Consent (GDPR revocation link)
+                      if (adsOn)
+                        Center(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              ref.read(hapticServiceProvider).selectionClick();
+                              ref.read(adServiceProvider).showConsentForm();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              child: Text(
+                                'Manage Ad Consent',
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w300,
+                                  color: fgColor.withValues(alpha: 0.3),
+                                  letterSpacing: 1,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor:
+                                      fgColor.withValues(alpha: 0.2),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
                       // Privacy Policy
                       Center(
                         child: GestureDetector(

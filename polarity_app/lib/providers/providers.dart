@@ -89,3 +89,6 @@ final rewardedAdReadyProvider = StateProvider<bool>((ref) => false);
 
 // Easter egg: activated by tapping POLARITY title 7 times, session-only
 final easterEggActiveProvider = StateProvider<bool>((ref) => false);
+
+// Tracks whether the easter egg was already used this app session (blocks re-trigger)
+final easterEggConsumedProvider = StateProvider<bool>((ref) => false);

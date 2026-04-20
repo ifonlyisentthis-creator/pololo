@@ -424,7 +424,20 @@ class GameEngine {
     magnetPhase += dt * 8;
 
     // ── Horizontal physics ──
-    final magnetForce = GameConstants.baseMagnetForce * magnetMult;
+    var magnetForce = GameConstants.baseMagnetForce * magnetMult;
+    var maxSpeed = GameConstants.maxHorizontalSpeed;
+
+    // Dampened physics during invincibility for controllable feel
+    if (isInvincible) {
+      final dur = GameConstants.shieldInvincibilityDuration; // 3.0
+      final elapsed = dur - invincibilityTimer;
+      // First 0.5s: gentle ramp from 30% → 65% force
+      // After 0.5s: steady 65% force
+      final ramp = elapsed < 0.5 ? 0.30 + 0.35 * (elapsed / 0.5) : 0.65;
+      magnetForce *= ramp;
+      maxSpeed *= 0.75;
+    }
+
     if (isTouching) {
       player.velocityX += magnetForce * dt;
     } else {
@@ -435,10 +448,7 @@ class GameEngine {
     // After 1 second, ~56% velocity remains — fast deceleration for precise control.
     player.velocityX *= _velocityDragFactor(dt);
 
-    player.velocityX = player.velocityX.clamp(
-      -GameConstants.maxHorizontalSpeed,
-      GameConstants.maxHorizontalSpeed,
-    );
+    player.velocityX = player.velocityX.clamp(-maxSpeed, maxSpeed);
     player.x += player.velocityX * dt;
 
     // Player Y locked
@@ -840,12 +850,12 @@ class GameEngine {
       shieldBreakActive = true;
       shieldBreakTimer = 0.5;
       shieldJustBroke = true;
-      screenShakeIntensity = 6.0;
+      screenShakeIntensity = 3.5;
 
       // Ring-pattern particles ejected outward from shield radius
       for (int i = 0; i < 16; i++) {
         final angle = (i / 16) * 2 * pi + _rng.nextDouble() * 0.3;
-        final speed = 150 + _rng.nextDouble() * 150;
+        final speed = 100 + _rng.nextDouble() * 100;
         particles.add(
           Particle(
             x: player.x + cos(angle) * (GameConstants.playerRadius + 14),
@@ -859,9 +869,16 @@ class GameEngine {
         );
       }
 
-      // Push player to center to prevent instant re-death on wall
-      player.x = screenWidth / 2;
-      player.velocityX = 0;
+      // Soft reposition: nudge away from walls, don't teleport to center
+      final safeLeft = screenWidth * 0.20;
+      final safeRight = screenWidth * 0.80;
+      if (player.x < safeLeft) {
+        player.x = screenWidth * 0.35;
+      } else if (player.x > safeRight) {
+        player.x = screenWidth * 0.65;
+      }
+      // Dampen velocity instead of freezing
+      player.velocityX *= 0.15;
       return;
     }
     _die();
@@ -1050,25 +1067,8 @@ class GameEngine {
   }
 
   void _spawnMagnetParticles(double dt) {
-    if (magnetParticles.length >= 50) return; // cap for performance
-    if (_rng.nextDouble() < dt * 38) {
-      final fromRight = isTouching;
-      final startX = fromRight ? screenWidth : 0.0;
-      final startY = player.y + (_rng.nextDouble() - 0.5) * 80;
-      final dx = player.x - startX;
-
-      magnetParticles.add(
-        Particle(
-          x: startX,
-          y: startY,
-          velocityX: dx * (1.5 + _rng.nextDouble()),
-          velocityY: (_rng.nextDouble() - 0.5) * 40,
-          life: 0.35 + _rng.nextDouble() * 0.25,
-          radius: 2.0 + _rng.nextDouble() * 2,
-          color: accentColor.withValues(alpha: 0.7),
-        ),
-      );
-    }
+    // V7: Magnet particles removed — wall aura + arcs + tendrils replace them
+    return;
   }
 
   void _spawnScoreParticles(Obstacle obs) {

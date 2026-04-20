@@ -6,17 +6,18 @@ import 'package:polarity/core/constants.dart';
 /// AdMob wrapper with UMP consent, interstitial, and rewarded ad support.
 /// Production ad unit IDs configured in GameConstants.
 ///
-/// Interstitial Policy (time-only, monotonic clock):
+/// Interstitial Policy (active playtime, monotonic clock):
 ///   An interstitial is shown on death ONLY when ALL conditions are true:
-///     1. >= [interstitialMinIntervalSeconds] monotonic seconds have elapsed
-///        since the last ad dismiss (or since app launch if no ad yet).
+///     1. >= [interstitialMinIntervalSeconds] of active play seconds have
+///        elapsed since the last ad dismiss (or since first game start).
 ///     2. No interstitial is currently on-screen.
 ///     3. Ads are enabled and an interstitial is loaded.
 ///   The timer resets ONLY when the user dismisses a successfully shown ad.
 ///
 ///   Anti-bypass:
 ///     - Uses Stopwatch (monotonic) — immune to system clock manipulation.
-///     - Cold-start grace: first ad requires 70s of actual app runtime.
+///     - Clock only ticks during active gameplay (paused on death/menu/ads).
+///     - Cold-start grace: first ad requires 70s of active playtime.
 ///     - App kill mid-ad → on restart, 70s grace period applies again.
 ///     - Double-fire guard via _interstitialOnScreen flag.
 ///
@@ -44,8 +45,8 @@ class AdService {
   bool _isRewardedLoading = false;
 
   // ── Monotonic timer (Stopwatch) — immune to clock manipulation ──
-  // Starts when init() is called. _lastAdDismissedMs starts at 0, so the
-  // first interstitial requires 70 real seconds of runtime after app launch.
+  // NOT auto-started. Game screen calls resumePlayClock() / pausePlayClock()
+  // so only active play seconds are counted toward the interstitial threshold.
   final Stopwatch _sessionClock = Stopwatch();
   int _lastAdDismissedMs = 0;
 
@@ -138,10 +139,39 @@ class AdService {
       return;
     }
 
-    // Start monotonic session clock immediately
-    _sessionClock.start();
+    // Session clock is NOT started here — game_screen controls it via
+    // resumePlayClock() / pausePlayClock() so only active playtime counts.
 
     await _refreshConsentAndInitializeAds(scheduleRetryOnFail: true);
+  }
+
+  /// Resume the play-clock. Call when the player starts actively playing
+  /// (game start, restart, revive). No-op if already running.
+  void resumePlayClock() => _sessionClock.start();
+
+  /// Pause the play-clock. Call when the player stops actively playing
+  /// (death, dispose). No-op if already stopped.
+  void pausePlayClock() => _sessionClock.stop();
+
+  /// Show the UMP consent form so users can revoke/change ad consent.
+  /// Required by GDPR for EEA/UK/Switzerland users.
+  Future<void> showConsentForm() async {
+    final completer = Completer<void>();
+    try {
+      ConsentForm.loadConsentForm(
+        (form) {
+          form.show((error) {
+            if (!completer.isCompleted) completer.complete();
+          });
+        },
+        (error) {
+          if (!completer.isCompleted) completer.complete();
+        },
+      );
+    } catch (_) {
+      if (!completer.isCompleted) completer.complete();
+    }
+    return completer.future;
   }
 
   void _kickAdRecovery() {
@@ -327,7 +357,7 @@ class AdService {
           _isInterstitialLoading = false;
           _isInterstitialReady = false;
           // Retry after delay to recover from transient network issues
-          Future.delayed(const Duration(seconds: 10), _preloadInterstitial);
+          Future.delayed(const Duration(seconds: 25), _preloadInterstitial);
         },
       ),
     );
@@ -366,7 +396,7 @@ class AdService {
           _isRewardedLoading = false;
           _isRewardedReady = false;
           onRewardedReadyChanged?.call(false);
-          Future.delayed(const Duration(seconds: 10), _preloadRewarded);
+          Future.delayed(const Duration(seconds: 25), _preloadRewarded);
         },
       ),
     );
