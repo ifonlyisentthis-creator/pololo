@@ -1021,35 +1021,48 @@ class GamePainter extends CustomPainter {
     final py = engine.player.y;
     final phase = engine.magnetPhase;
 
-    // Always connect to the wall the player is being pulled toward
-    final wallX = engine.isTouching ? size.width : 0.0;
+    // Position-based: nearest wall
+    final half = size.width / 2;
+    final nearLeft = px < half;
+    final wallX = nearLeft ? 0.0 : size.width;
+    final distToWall = nearLeft ? px : size.width - px;
+    final proximity = (1.0 - distToWall / half).clamp(0.0, 1.0);
+    if (proximity < 0.15) return;
 
-    for (int i = 0; i < 3; i++) {
-      final offset = (phase + i * 2.1) % (pi * 2);
-      final yOff = sin(offset) * 30;
-      final baseAlpha = (0.08 + sin(offset) * 0.04).clamp(0.0, 1.0);
+    for (int i = 0; i < 2; i++) {
+      final p = phase + i * 1.8;
+      final ySpread = (i == 0 ? 1.0 : -1.0) * 14.0;
+      final yOff = sin(p) * (25.0 + sin(p * 0.7) * 10.0);
+      final midX = (wallX + px) / 2;
+      final midY = py + yOff + ySpread;
+      final baseAlpha = (0.14 + sin(phase * 3.0 + i * 1.5).abs() * 0.10) * proximity;
 
       _linePath
         ..reset()
-        ..moveTo(wallX, py + yOff)
-        ..quadraticBezierTo(
-          (wallX + px) / 2, py + yOff + cos(offset) * 15, px, py);
+        ..moveTo(wallX, py + ySpread)
+        ..quadraticBezierTo(midX, midY, px, py);
 
       // Glow
       _linePaint
-        ..color = visibleAccent.withValues(alpha: baseAlpha * 0.5)
+        ..color = visibleAccent.withValues(alpha: 0.08 * proximity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.0
+        ..strokeWidth = 4.0
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
         ..shader = null;
       canvas.drawPath(_linePath, _linePaint);
 
-      // Core
+      // Core with gradient
       _linePaint
-        ..color = visibleAccent.withValues(alpha: baseAlpha)
-        ..strokeWidth = 1.0
+        ..shader = ui.Gradient.linear(
+          Offset(wallX, py),
+          Offset(px, py),
+          [visibleAccent.withValues(alpha: 0.0), visibleAccent.withValues(alpha: baseAlpha)],
+          [0.0, 1.0],
+        )
+        ..strokeWidth = 2.0
         ..maskFilter = null;
       canvas.drawPath(_linePath, _linePaint);
+      _linePaint.shader = null;
     }
   }
 
