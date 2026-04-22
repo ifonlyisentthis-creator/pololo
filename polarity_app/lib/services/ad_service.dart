@@ -264,7 +264,11 @@ class AdService {
   }
 
   /// Request UMP consent. Returns a Future that completes when consent is
-  /// resolved (form shown + dismissed, no form needed, or error).
+  /// resolved (form shown + dismissed if required, no form needed, or error).
+  ///
+  /// Calls requestConsentInfoUpdate() on every launch (required by Google UMP).
+  /// Uses loadAndShowConsentFormIfRequired() to respect cached consent and only
+  /// show form when legally required (e.g., first launch, expired consent, etc).
   Future<void> _requestConsent() async {
     final completer = Completer<void>();
 
@@ -274,23 +278,13 @@ class AdService {
         params,
         () async {
           try {
-            if (await ConsentInformation.instance.isConsentFormAvailable()) {
-              ConsentForm.loadConsentForm(
-                (form) {
-                  form.show((error) {
-                    // Form dismissed (with or without error) → done
-                    if (!completer.isCompleted) completer.complete();
-                  });
-                },
-                (error) {
-                  // Form failed to load → proceed
-                  if (!completer.isCompleted) completer.complete();
-                },
-              );
-            } else {
-              // No consent form needed → done
+            // This method is Google's built-in compliance check:
+            // - If consent already given and not expired → form stays hidden
+            // - If consent expired or missing → form shows
+            // - On completion (shown or not), ready for ads if canRequestAds()
+            ConsentForm.loadAndShowConsentFormIfRequired((formError) {
               if (!completer.isCompleted) completer.complete();
-            }
+            });
           } catch (_) {
             if (!completer.isCompleted) completer.complete();
           }
