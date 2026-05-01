@@ -44,7 +44,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   List<int> _buildEasterEggDeck() {
     final deck = List<int>.generate(
-      GameConstants.easterEggDeathMessages.length, (i) => i,
+      GameConstants.easterEggDeathMessages.length,
+      (i) => i,
     );
     deck.shuffle(_easterEggRng);
     return deck;
@@ -61,7 +62,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
       }
       _easterEggCursor = 0;
     }
-    return GameConstants.easterEggDeathMessages[_easterEggDeck[_easterEggCursor++]];
+    return GameConstants
+        .easterEggDeathMessages[_easterEggDeck[_easterEggCursor++]];
   }
 
   // Fixed-step simulation gives stable physics and smoother pacing under load.
@@ -276,9 +278,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final modeBest = storage.leaderboardBestScore;
     if (_engine.score > modeBest) {
       storage.setLeaderboardBestScore(_engine.score);
-      ref
-          .read(leaderboardServiceProvider)
-          .submitScore(_engine.score);
+      ref.read(leaderboardServiceProvider).submitScore(_engine.score);
     }
 
     // V2: Persist tier if upgraded — Bug fix 3: consume immediately
@@ -492,7 +492,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          _engine.debugInvincible ? 'GOD' : 'DBG',
+                          _engine.debugInvincible ? 'INV' : 'DBG',
                           style: const TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 10,
@@ -560,7 +560,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
           const Spacer(),
 
           // Tutorial: full instructions before first tap
-          if (_engine.showTutorial && _engine.state == GameState.playing && !_engine.tutorialHasInteracted)
+          if (_engine.showTutorial &&
+              _engine.state == GameState.playing &&
+              !_engine.tutorialHasInteracted)
             Opacity(
               opacity: _engine.tutorialOpacity,
               child: Padding(
@@ -590,7 +592,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
                     ),
                     const SizedBox(height: 28),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(
                           color: fgColor.withValues(alpha: 0.15),
@@ -615,7 +620,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
             ),
 
           // Tutorial: controls hint after tap, fades at score 5
-          if (_engine.showTutorial && _engine.state == GameState.playing && _engine.tutorialHasInteracted)
+          if (_engine.showTutorial &&
+              _engine.state == GameState.playing &&
+              _engine.tutorialHasInteracted)
             Opacity(
               opacity: _engine.tutorialOpacity,
               child: Text(
@@ -735,8 +742,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _quitFromPauseDialog(ctx),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 10,
+                  ),
                   child: Text(
                     'QUIT',
                     style: TextStyle(

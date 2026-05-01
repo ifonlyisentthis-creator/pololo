@@ -30,8 +30,10 @@ class GamePainter extends CustomPainter {
   final Path _shapePath = Path();
   final Path _shapePath2 = Path();
   final List<Color> _obstacleGradientColors = [Colors.black, Colors.black];
+  final List<Color> _magnetGradientColors = [Colors.white, Colors.white];
   final List<Color> _gradient2 = [Colors.white, Colors.white];
   final List<Color> _gradient3 = [Colors.white, Colors.white, Colors.white];
+  final Paint _alphaLayerPaint = Paint();
   final Paint _fxStrokePaint = Paint();
   final Paint _fxFillPaint = Paint();
 
@@ -48,11 +50,7 @@ class GamePainter extends CustomPainter {
   // Cached tutorial opacity bucket — avoids per-frame setState upstream
   int lastTutorialOpacityBucket = -1;
 
-  GamePainter({
-    required this.engine,
-    required this.isDarkTheme,
-    super.repaint,
-  });
+  GamePainter({required this.engine, required this.isDarkTheme, super.repaint});
 
   // Phase 5 inverts the theme regardless of user setting
   bool get _inverted => engine.isPhase5Inverted;
@@ -88,10 +86,7 @@ class GamePainter extends CustomPainter {
     _p.style = PaintingStyle.fill;
     _p.shader = null;
     _p.maskFilter = null;
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      _p,
-    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _p);
 
     // Pre-resolve effective theme once per frame (cached, no allocation)
     final theme = engine.effectiveTheme;
@@ -119,10 +114,16 @@ class GamePainter extends CustomPainter {
     _drawPhaseTransition(canvas, size);
     _drawMilestoneGlow(canvas, size);
     _drawEliteUnlockFlash(canvas, size);
-        // V3: Theme transition VFX
-        if (theme != null && engine.themeTransitionTimer > 0) {
-      ThemeRenderer.drawThemeTransition(canvas, size, engine.player.x,
-          engine.player.y, engine.themeTransitionTimer, theme);
+    // V3: Theme transition VFX
+    if (theme != null && engine.themeTransitionTimer > 0) {
+      ThemeRenderer.drawThemeTransition(
+        canvas,
+        size,
+        engine.player.x,
+        engine.player.y,
+        engine.themeTransitionTimer,
+        theme,
+      );
     }
     _drawShockwave(canvas, size);
     _drawDeathParticles(canvas, size, theme);
@@ -144,7 +145,11 @@ class GamePainter extends CustomPainter {
   void _drawAmbientParticles(Canvas canvas, Size size, VisualTheme? theme) {
     // V3: Use theme renderer if theme is active
     if (theme != null) {
-      ThemeRenderer.drawAmbientParticles(canvas, engine.ambientParticles, theme);
+      ThemeRenderer.drawAmbientParticles(
+        canvas,
+        engine.ambientParticles,
+        theme,
+      );
       return;
     }
     final particles = engine.ambientParticles;
@@ -161,8 +166,14 @@ class GamePainter extends CustomPainter {
   void _drawObstacles(Canvas canvas, Size size, VisualTheme? theme) {
     // V3: Use theme renderer if theme is active
     if (theme != null) {
-      ThemeRenderer.drawObstacles(canvas, size, engine.obstacles,
-          theme, fgColor, engine.gameTime);
+      ThemeRenderer.drawObstacles(
+        canvas,
+        size,
+        engine.obstacles,
+        theme,
+        fgColor,
+        engine.gameTime,
+      );
       return;
     }
     // Hoist gradient colors outside loop (avoids per-obstacle List allocation)
@@ -180,15 +191,23 @@ class GamePainter extends CustomPainter {
       if (obs.fromLeft) {
         rect = Rect.fromLTWH(0, obs.worldY - halfT, obs.width, obs.thickness);
         // Round only the exposed tip end
-        rrect = RRect.fromRectAndCorners(rect,
-            topRight: Radius.circular(halfT),
-            bottomRight: Radius.circular(halfT));
+        rrect = RRect.fromRectAndCorners(
+          rect,
+          topRight: Radius.circular(halfT),
+          bottomRight: Radius.circular(halfT),
+        );
       } else {
         rect = Rect.fromLTWH(
-            size.width - obs.width, obs.worldY - halfT, obs.width, obs.thickness);
-        rrect = RRect.fromRectAndCorners(rect,
-            topLeft: Radius.circular(halfT),
-            bottomLeft: Radius.circular(halfT));
+          size.width - obs.width,
+          obs.worldY - halfT,
+          obs.width,
+          obs.thickness,
+        );
+        rrect = RRect.fromRectAndCorners(
+          rect,
+          topLeft: Radius.circular(halfT),
+          bottomLeft: Radius.circular(halfT),
+        );
       }
 
       // Subtle gradient: solid fgColor fading slightly toward the wall anchor
@@ -226,16 +245,26 @@ class GamePainter extends CustomPainter {
     // V3: Use theme renderer if theme is active
     if (theme != null) {
       if (invincAlpha < 1.0) {
-        canvas.saveLayer(null, Paint()..color = Color.fromRGBO(0, 0, 0, invincAlpha));
+        _alphaLayerPaint.color = Color.fromRGBO(0, 0, 0, invincAlpha);
+        canvas.saveLayer(null, _alphaLayerPaint);
       }
-      ThemeRenderer.drawBall(canvas, px, py, pr, theme,
-          glow, intensity, stretch);
+      ThemeRenderer.drawBall(
+        canvas,
+        px,
+        py,
+        pr,
+        theme,
+        glow,
+        intensity,
+        stretch,
+      );
       if (invincAlpha < 1.0) canvas.restore();
       return;
     }
 
     if (invincAlpha < 1.0) {
-      canvas.saveLayer(null, Paint()..color = Color.fromRGBO(0, 0, 0, invincAlpha));
+      _alphaLayerPaint.color = Color.fromRGBO(0, 0, 0, invincAlpha);
+      canvas.saveLayer(null, _alphaLayerPaint);
     }
 
     canvas.save();
@@ -272,7 +301,12 @@ class GamePainter extends CustomPainter {
 
   // Phase 1: Glowing Sphere
   void _drawPhase1Sphere(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     final glowR = pr + 8 + sin(glow) * 3 * intensity;
     // Glow aura
     _fxFillPaint
@@ -310,7 +344,12 @@ class GamePainter extends CustomPainter {
 
   // Phase 2: Hollow Ring with orbital dust
   void _drawPhase2Ring(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     // Outer glow
     _fxFillPaint
       ..color = accent.withValues(alpha: 0.2 * intensity)
@@ -349,14 +388,22 @@ class GamePainter extends CustomPainter {
         ..strokeWidth = 0
         ..maskFilter = null
         ..shader = null;
-      canvas.drawCircle(Offset(ox, oy), 1.5 + sin(glow * 3 + i) * 0.5,
-          _fxFillPaint);
+      canvas.drawCircle(
+        Offset(ox, oy),
+        1.5 + sin(glow * 3 + i) * 0.5,
+        _fxFillPaint,
+      );
     }
   }
 
   // Phase 3: Pulsating Diamond
   void _drawPhase3Diamond(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     final pulse = 1.0 + sin(glow * 3) * 0.12 * intensity;
     final r = pr * pulse;
     // Glow
@@ -381,12 +428,10 @@ class GamePainter extends CustomPainter {
     _gradient2[0] = Colors.white;
     _gradient2[1] = accent;
     _shaderP
-      ..shader = ui.Gradient.radial(
-        Offset.zero,
-        r * 1.2,
-        _gradient2,
-        const [0.0, 1.0],
-      )
+      ..shader = ui.Gradient.radial(Offset.zero, r * 1.2, _gradient2, const [
+        0.0,
+        1.0,
+      ])
       ..style = PaintingStyle.fill
       ..maskFilter = null;
     canvas.drawPath(path, _shaderP);
@@ -403,7 +448,12 @@ class GamePainter extends CustomPainter {
 
   // Phase 4: Searing Horizontal Slit
   void _drawPhase4Slit(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     final flicker = 1.0 + sin(glow * 6) * 0.15 * intensity;
     final slitW = pr * 2.2 * flicker;
     final slitH = pr * 0.35;
@@ -415,13 +465,20 @@ class GamePainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
       ..shader = null;
     canvas.drawRect(
-      Rect.fromCenter(center: Offset.zero, width: slitW + 16, height: slitH + 12),
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: slitW + 16,
+        height: slitH + 12,
+      ),
       _fxFillPaint,
     );
 
     // Core slit
-    final slitRect =
-        Rect.fromCenter(center: Offset.zero, width: slitW, height: slitH);
+    final slitRect = Rect.fromCenter(
+      center: Offset.zero,
+      width: slitW,
+      height: slitH,
+    );
     final slitEdge = accent.withValues(alpha: 0.3);
     _gradient3[0] = slitEdge;
     _gradient3[1] = Colors.white;
@@ -452,7 +509,12 @@ class GamePainter extends CustomPainter {
 
   // Phase 5: Pitch-black Singularity with contrasting aura
   void _drawPhase5Singularity(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     // Aura color must contrast with background (white bg in phase 5)
     final auraColor = fgColor;
     final auraR = pr + 10 + sin(glow * 2) * 3 * intensity;
@@ -487,12 +549,10 @@ class GamePainter extends CustomPainter {
     _gradient2[0] = const Color(0xFF111111);
     _gradient2[1] = Colors.black;
     _shaderP
-      ..shader = ui.Gradient.radial(
-        Offset.zero,
-        pr * 0.6,
-        _gradient2,
-        const [0.0, 1.0],
-      )
+      ..shader = ui.Gradient.radial(Offset.zero, pr * 0.6, _gradient2, const [
+        0.0,
+        1.0,
+      ])
       ..style = PaintingStyle.fill
       ..maskFilter = null;
     canvas.drawCircle(Offset.zero, pr * 0.6, _shaderP);
@@ -500,7 +560,13 @@ class GamePainter extends CustomPainter {
 
   // ── Elite Player Variants ──
   void _drawElitePlayer(
-      Canvas canvas, double pr, int phase, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    int phase,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     switch (phase) {
       case 0:
         _drawEliteSphere(canvas, pr, glow, accent, intensity);
@@ -522,7 +588,12 @@ class GamePainter extends CustomPainter {
 
   // Elite Phase 0: Sphere with rotating prismatic ring
   void _drawEliteSphere(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     // Larger glow aura
     final glowR = pr + 12 + sin(glow) * 4 * intensity;
     _fxFillPaint
@@ -576,7 +647,12 @@ class GamePainter extends CustomPainter {
 
   // Elite Phase 1: Double nested rings + 5 orbital dots
   void _drawEliteRing(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     // Larger glow aura
     _fxFillPaint
       ..color = accent.withValues(alpha: 0.25 * intensity)
@@ -630,14 +706,22 @@ class GamePainter extends CustomPainter {
         ..strokeWidth = 0
         ..maskFilter = null
         ..shader = null;
-      canvas.drawCircle(Offset(ox, oy), 2.0 + sin(glow * 4 + i) * 0.8,
-          _fxFillPaint);
+      canvas.drawCircle(
+        Offset(ox, oy),
+        2.0 + sin(glow * 4 + i) * 0.8,
+        _fxFillPaint,
+      );
     }
   }
 
   // Elite Phase 2: Diamond with inner rotating equilateral triangle
   void _drawEliteDiamond(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     final pulse = 1.0 + sin(glow * 3) * 0.12 * intensity;
     final r = pr * pulse;
     // Larger glow
@@ -662,12 +746,10 @@ class GamePainter extends CustomPainter {
     _gradient2[0] = Colors.white;
     _gradient2[1] = accent;
     _shaderP
-      ..shader = ui.Gradient.radial(
-        Offset.zero,
-        r * 1.2,
-        _gradient2,
-        const [0.0, 1.0],
-      )
+      ..shader = ui.Gradient.radial(Offset.zero, r * 1.2, _gradient2, const [
+        0.0,
+        1.0,
+      ])
       ..style = PaintingStyle.fill
       ..maskFilter = null;
     canvas.drawPath(path, _shaderP);
@@ -709,7 +791,12 @@ class GamePainter extends CustomPainter {
 
   // Elite Phase 3: Slit with pulsing energy dots at endpoints
   void _drawEliteSlit(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     final flicker = 1.0 + sin(glow * 6) * 0.15 * intensity;
     final slitW = pr * 2.2 * flicker;
     final slitH = pr * 0.35;
@@ -721,13 +808,20 @@ class GamePainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12)
       ..shader = null;
     canvas.drawRect(
-      Rect.fromCenter(center: Offset.zero, width: slitW + 20, height: slitH + 16),
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: slitW + 20,
+        height: slitH + 16,
+      ),
       _fxFillPaint,
     );
 
     // Core slit
-    final slitRect =
-        Rect.fromCenter(center: Offset.zero, width: slitW, height: slitH);
+    final slitRect = Rect.fromCenter(
+      center: Offset.zero,
+      width: slitW,
+      height: slitH,
+    );
     final slitEdge = accent.withValues(alpha: 0.3);
     _gradient3[0] = slitEdge;
     _gradient3[1] = Colors.white;
@@ -770,7 +864,12 @@ class GamePainter extends CustomPainter {
 
   // Elite Phase 4: Singularity with orbiting accretion disk
   void _drawEliteSingularity(
-      Canvas canvas, double pr, double glow, Color accent, double intensity) {
+    Canvas canvas,
+    double pr,
+    double glow,
+    Color accent,
+    double intensity,
+  ) {
     // Aura color must contrast with background (white bg in phase 5)
     final auraColor = fgColor;
     // Larger contrasting aura
@@ -805,12 +904,10 @@ class GamePainter extends CustomPainter {
     _gradient2[0] = const Color(0xFF111111);
     _gradient2[1] = Colors.black;
     _shaderP
-      ..shader = ui.Gradient.radial(
-        Offset.zero,
-        pr * 0.6,
-        _gradient2,
-        const [0.0, 1.0],
-      )
+      ..shader = ui.Gradient.radial(Offset.zero, pr * 0.6, _gradient2, const [
+        0.0,
+        1.0,
+      ])
       ..style = PaintingStyle.fill
       ..maskFilter = null;
     canvas.drawCircle(Offset.zero, pr * 0.6, _shaderP);
@@ -848,7 +945,11 @@ class GamePainter extends CustomPainter {
       ..strokeWidth = 0
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20)
       ..shader = null;
-    canvas.drawCircle(Offset(engine.player.x, engine.player.y), radius, _fxFillPaint);
+    canvas.drawCircle(
+      Offset(engine.player.x, engine.player.y),
+      radius,
+      _fxFillPaint,
+    );
   }
 
   // ── Elite Unlock Flash ──
@@ -866,7 +967,11 @@ class GamePainter extends CustomPainter {
       ..strokeWidth = ringStroke
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)
       ..shader = null;
-    canvas.drawCircle(Offset(engine.player.x, engine.player.y), ringRadius, _fxStrokePaint);
+    canvas.drawCircle(
+      Offset(engine.player.x, engine.player.y),
+      ringRadius,
+      _fxStrokePaint,
+    );
     // Subtle screen-wide golden wash
     final washAlpha = (1.0 - progress) * 0.06;
     _fxFillPaint
@@ -976,7 +1081,11 @@ class GamePainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4)
       ..shader = null;
-    canvas.drawCircle(Offset(engine.player.x, engine.player.y), radius, _fxStrokePaint);
+    canvas.drawCircle(
+      Offset(engine.player.x, engine.player.y),
+      radius,
+      _fxStrokePaint,
+    );
 
     // Brief screen-wide color wash
     final washAlpha = (1.0 - progress) * 0.08;
@@ -1002,19 +1111,22 @@ class GamePainter extends CustomPainter {
     _p.strokeWidth = strokeWidth;
     _p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     _p.shader = null;
-    canvas.drawCircle(
-      Offset(engine.shockwaveX, engine.shockwaveY),
-      radius,
-      _p,
-    );
+    canvas.drawCircle(Offset(engine.shockwaveX, engine.shockwaveY), radius, _p);
   }
 
   // ── Magnet Lines ──
   void _drawMagnetLines(Canvas canvas, Size size, VisualTheme? theme) {
     // V3: Use theme renderer if theme is active
     if (theme != null) {
-      ThemeRenderer.drawMagnetEffect(canvas, size, engine.player.x,
-          engine.player.y, engine.isTouching, theme, engine.gameTime);
+      ThemeRenderer.drawMagnetEffect(
+        canvas,
+        size,
+        engine.player.x,
+        engine.player.y,
+        engine.isTouching,
+        theme,
+        engine.gameTime,
+      );
       return;
     }
     final px = engine.player.x;
@@ -1035,7 +1147,8 @@ class GamePainter extends CustomPainter {
       final yOff = sin(p) * (25.0 + sin(p * 0.7) * 10.0);
       final midX = (wallX + px) / 2;
       final midY = py + yOff + ySpread;
-      final baseAlpha = (0.14 + sin(phase * 3.0 + i * 1.5).abs() * 0.10) * proximity;
+      final baseAlpha =
+          (0.14 + sin(phase * 3.0 + i * 1.5).abs() * 0.10) * proximity;
 
       _linePath
         ..reset()
@@ -1052,11 +1165,13 @@ class GamePainter extends CustomPainter {
       canvas.drawPath(_linePath, _linePaint);
 
       // Core with gradient
+      _magnetGradientColors[0] = visibleAccent.withValues(alpha: 0.0);
+      _magnetGradientColors[1] = visibleAccent.withValues(alpha: baseAlpha);
       _linePaint
         ..shader = ui.Gradient.linear(
           Offset(wallX, py),
           Offset(px, py),
-          [visibleAccent.withValues(alpha: 0.0), visibleAccent.withValues(alpha: baseAlpha)],
+          _magnetGradientColors,
           [0.0, 1.0],
         )
         ..strokeWidth = 2.0
@@ -1071,7 +1186,11 @@ class GamePainter extends CustomPainter {
     // V3: Use theme renderer if theme is active
     if (theme != null) {
       ThemeRenderer.drawTrailParticles(
-          canvas, size, engine.trailParticles, theme);
+        canvas,
+        size,
+        engine.trailParticles,
+        theme,
+      );
       return;
     }
 
@@ -1183,10 +1302,7 @@ class GamePainter extends CustomPainter {
     _p.style = PaintingStyle.fill;
     _p.shader = null;
     _p.maskFilter = null;
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      _p,
-    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _p);
   }
 
   // ── V4: Troll Ghost Ball ──
@@ -1221,11 +1337,7 @@ class GamePainter extends CustomPainter {
     _p2.maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     _p2.style = PaintingStyle.fill;
     _p2.shader = null;
-    canvas.drawCircle(
-      Offset(troll.x, troll.y),
-      troll.radius * 1.8,
-      _p2,
-    );
+    canvas.drawCircle(Offset(troll.x, troll.y), troll.radius * 1.8, _p2);
   }
 
   // ── V4: Fake Death Flash (troll) ──
@@ -1240,10 +1352,7 @@ class GamePainter extends CustomPainter {
     _p.style = PaintingStyle.fill;
     _p.shader = null;
     _p.maskFilter = null;
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      _p,
-    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _p);
   }
 
   // ── Vignette Overlay (cached — only rebuilt on inversion/size change) ──
@@ -1296,8 +1405,10 @@ class GamePainter extends CustomPainter {
     }
     _cachedCountdownPainter!.paint(
       canvas,
-      Offset((size.width - _cachedCountdownPainter!.width) / 2,
-          (size.height - _cachedCountdownPainter!.height) / 2),
+      Offset(
+        (size.width - _cachedCountdownPainter!.width) / 2,
+        (size.height - _cachedCountdownPainter!.height) / 2,
+      ),
     );
   }
 

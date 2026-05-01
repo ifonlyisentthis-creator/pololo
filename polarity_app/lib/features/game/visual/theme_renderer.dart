@@ -18,9 +18,19 @@ class ThemeRenderer {
   static final Paint _strokePaint = Paint();
   static final Paint _linePaint = Paint();
   static final Path _linePath = Path();
-  static final List<Color> _obstacleGradientColors = [Colors.black, Colors.black];
-  static final List<Color> _wallGradientColorsLeft = [Colors.black, Colors.black];
-  static final List<Color> _wallGradientColorsRight = [Colors.black, Colors.black];
+  static final List<Color> _obstacleGradientColors = [
+    Colors.black,
+    Colors.black,
+  ];
+  static final List<Color> _magnetGradientColors = [Colors.white, Colors.white];
+  static final List<Color> _wallGradientColorsLeft = [
+    Colors.black,
+    Colors.black,
+  ];
+  static final List<Color> _wallGradientColorsRight = [
+    Colors.black,
+    Colors.black,
+  ];
   static double? _cachedBallGlowBlurRadius;
   static MaskFilter? _cachedBallGlowBlur;
 
@@ -28,8 +38,16 @@ class ThemeRenderer {
 
   /// Draw the player ball with theme visuals.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawBall(Canvas canvas, double px, double py, double pr,
-      VisualTheme theme, double glowPhase, double intensity, double stretch) {
+  static void drawBall(
+    Canvas canvas,
+    double px,
+    double py,
+    double pr,
+    VisualTheme theme,
+    double glowPhase,
+    double intensity,
+    double stretch,
+  ) {
     final colors = theme.ballColors;
 
     canvas.save();
@@ -42,14 +60,23 @@ class ThemeRenderer {
     // Draw glow aura.
     final glowR = pr + theme.ballGlowRadius + sin(glowPhase) * 3 * intensity;
     _fxPaint
-      ..color = colors.first.withValues(alpha: theme.ballGlowIntensity * intensity)
+      ..color = colors.first.withValues(
+        alpha: theme.ballGlowIntensity * intensity,
+      )
       ..maskFilter = _ballGlowMaskFilter(theme.ballGlowRadius)
       ..style = PaintingStyle.fill
       ..shader = null;
     canvas.drawCircle(Offset.zero, glowR, _fxPaint);
 
     // Draw shape via specialised ball painter.
-    BallPainters.draw(theme.ballShape, canvas, pr, colors, glowPhase, intensity);
+    BallPainters.draw(
+      theme.ballShape,
+      canvas,
+      pr,
+      colors,
+      glowPhase,
+      intensity,
+    );
 
     canvas.restore();
   }
@@ -63,7 +90,10 @@ class ThemeRenderer {
   }
 
   static void _applyBallEffect(
-      Canvas canvas, VisualTheme theme, double glowPhase) {
+    Canvas canvas,
+    VisualTheme theme,
+    double glowPhase,
+  ) {
     final speed = theme.ballEffectSpeed;
     switch (theme.ballEffect) {
       case BallEffect.pulse:
@@ -172,13 +202,19 @@ class ThemeRenderer {
 
   /// Draw obstacles with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawObstacles(Canvas canvas, Size size, List<Obstacle> obstacles,
-      VisualTheme theme, Color fgColor, double gameTime) {
+  static void drawObstacles(
+    Canvas canvas,
+    Size size,
+    List<Obstacle> obstacles,
+    VisualTheme theme,
+    Color fgColor,
+    double gameTime,
+  ) {
     final colors = theme.obstacleColors;
-    final primary =
-        colors.isNotEmpty ? colors.first : fgColor;
-    final secondary =
-        colors.length > 1 ? colors[1] : primary.withValues(alpha: 0.6);
+    final primary = colors.isNotEmpty ? colors.first : fgColor;
+    final secondary = colors.length > 1
+        ? colors[1]
+        : primary.withValues(alpha: 0.6);
 
     // Preserve theme identity but keep obstacle colors readable against current bg.
     final effectivePrimary = _boostObstacleContrast(primary, fgColor);
@@ -202,22 +238,29 @@ class ThemeRenderer {
 
       // Base obstacle body with rounded end.
       final rrect = fromLeft
-          ? RRect.fromRectAndCorners(rect,
+          ? RRect.fromRectAndCorners(
+              rect,
               topRight: Radius.circular(halfT),
-              bottomRight: Radius.circular(halfT))
-          : RRect.fromRectAndCorners(rect,
+              bottomRight: Radius.circular(halfT),
+            )
+          : RRect.fromRectAndCorners(
+              rect,
               topLeft: Radius.circular(halfT),
-              bottomLeft: Radius.circular(halfT));
+              bottomLeft: Radius.circular(halfT),
+            );
 
       final gradStart = fromLeft
           ? Offset(obsWidth, worldY)
           : Offset(size.width - obsWidth, worldY);
-      final gradEnd =
-          fromLeft ? Offset(0, worldY) : Offset(size.width, worldY);
+      final gradEnd = fromLeft ? Offset(0, worldY) : Offset(size.width, worldY);
 
       _fillPaint
         ..color = const Color(0xFFFFFFFF)
-        ..shader = ui.Gradient.linear(gradStart, gradEnd, _obstacleGradientColors)
+        ..shader = ui.Gradient.linear(
+          gradStart,
+          gradEnd,
+          _obstacleGradientColors,
+        )
         ..blendMode = BlendMode.srcOver
         ..style = PaintingStyle.fill
         ..maskFilter = null;
@@ -228,9 +271,9 @@ class ThemeRenderer {
   static Color _boostObstacleContrast(Color color, Color fgColor) {
     final channelDistance =
         ((color.r - fgColor.r).abs() +
-                (color.g - fgColor.g).abs() +
-                (color.b - fgColor.b).abs()) /
-            3.0;
+            (color.g - fgColor.g).abs() +
+            (color.b - fgColor.b).abs()) /
+        3.0;
 
     // If color drifts too close to background (far from fg), nudge it toward fg.
     if (channelDistance <= 0.62) {
@@ -245,8 +288,15 @@ class ThemeRenderer {
 
   /// Draw magnet lines/particles with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawMagnetEffect(Canvas canvas, Size size, double playerX,
-      double playerY, bool isTouching, VisualTheme theme, double gameTime) {
+  static void drawMagnetEffect(
+    Canvas canvas,
+    Size size,
+    double playerX,
+    double playerY,
+    bool isTouching,
+    VisualTheme theme,
+    double gameTime,
+  ) {
     final color = theme.magnetColors.isNotEmpty
         ? theme.magnetColors.first
         : theme.ballColors.first;
@@ -311,14 +361,17 @@ class ThemeRenderer {
       );
 
       // Core tendril with gradient
-      final baseAlpha = (0.14 + sin(gameTime * 3.0 + i * 1.5).abs() * 0.10) * proximity;
+      final baseAlpha =
+          (0.14 + sin(gameTime * 3.0 + i * 1.5).abs() * 0.10) * proximity;
+      _magnetGradientColors[0] = color.withValues(alpha: 0.0);
+      _magnetGradientColors[1] = color.withValues(alpha: baseAlpha);
       canvas.drawPath(
         _linePath,
         _linePaint
           ..shader = ui.Gradient.linear(
             Offset(wallX, playerY),
             Offset(playerX, playerY),
-            [color.withValues(alpha: 0.0), color.withValues(alpha: baseAlpha)],
+            _magnetGradientColors,
             [0.0, 1.0],
           )
           ..style = PaintingStyle.stroke
@@ -333,8 +386,11 @@ class ThemeRenderer {
 
   /// Draw ambient particles with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawAmbientParticles(Canvas canvas,
-      List<Particle> ambientParticles, VisualTheme theme) {
+  static void drawAmbientParticles(
+    Canvas canvas,
+    List<Particle> ambientParticles,
+    VisualTheme theme,
+  ) {
     final color = theme.ambientColors.isNotEmpty
         ? theme.ambientColors.first
         : theme.ballColors.first;
@@ -356,8 +412,12 @@ class ThemeRenderer {
 
   /// Draw wall accents with theme style.
   /// [theme] should already be the effective theme (inverted if Phase 5).
-  static void drawWalls(Canvas canvas, Size size, VisualTheme theme,
-      double gameTime) {
+  static void drawWalls(
+    Canvas canvas,
+    Size size,
+    VisualTheme theme,
+    double gameTime,
+  ) {
     if (theme.wallStyle == WallStyle.clean) return;
 
     final color = theme.wallAccentColor;
@@ -371,22 +431,19 @@ class ThemeRenderer {
         // Subtle gradient strips along edges.
         _drawWallGlow(canvas, size, color, baseAlpha);
       case WallStyle.pulse:
-        final pulseAlpha =
-            baseAlpha * (0.5 + sin(gameTime * 3).abs() * 0.5);
+        final pulseAlpha = baseAlpha * (0.5 + sin(gameTime * 3).abs() * 0.5);
         _drawWallGlow(canvas, size, color, pulseAlpha);
       case WallStyle.drip:
         _drawWallGlow(canvas, size, color, baseAlpha * 0.7);
       case WallStyle.crack:
         _drawWallGlow(canvas, size, color, baseAlpha * 0.5);
       case WallStyle.electric:
-        final sparkAlpha =
-            baseAlpha * (sin(gameTime * 8) > 0.3 ? 1.0 : 0.2);
+        final sparkAlpha = baseAlpha * (sin(gameTime * 8) > 0.3 ? 1.0 : 0.2);
         _drawWallGlow(canvas, size, color, sparkAlpha);
       case WallStyle.frost:
         _drawWallGlow(canvas, size, color, baseAlpha * 0.8);
       case WallStyle.flame:
-        final flameAlpha =
-            baseAlpha * (0.6 + sin(gameTime * 5).abs() * 0.4);
+        final flameAlpha = baseAlpha * (0.6 + sin(gameTime * 5).abs() * 0.4);
         _drawWallGlow(canvas, size, color, flameAlpha);
       case WallStyle.clean:
         break;
@@ -394,7 +451,11 @@ class ThemeRenderer {
   }
 
   static void _drawWallGlow(
-      Canvas canvas, Size size, Color color, double alpha) {
+    Canvas canvas,
+    Size size,
+    Color color,
+    double alpha,
+  ) {
     final a = (alpha * 0.7).clamp(0.0, 1.0);
     // Gradient strips along left and right edges
     final leftRect = Rect.fromLTWH(0, 0, 20, size.height);
@@ -432,8 +493,14 @@ class ThemeRenderer {
   // ── Theme transition VFX ─────────────────────────────────────────────────
 
   /// Draw theme transition VFX (expanding ring + screen wash).
-  static void drawThemeTransition(Canvas canvas, Size size, double playerX,
-      double playerY, double timer, VisualTheme theme) {
+  static void drawThemeTransition(
+    Canvas canvas,
+    Size size,
+    double playerX,
+    double playerY,
+    double timer,
+    VisualTheme theme,
+  ) {
     if (timer <= 0) return;
     final progress = 1.0 - timer; // 0 to 1
     final radius = progress * 400.0;

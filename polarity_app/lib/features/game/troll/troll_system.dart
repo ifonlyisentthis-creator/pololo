@@ -2,26 +2,26 @@ import 'dart:math';
 
 /// Describes a troll ball's movement behaviour.
 enum TrollBehaviour {
-  mirror,       // Mirrors player X
-  opposite,     // Opposite X of player
-  orbit,        // Orbits around the player
-  drunk,        // Random wobble near player
-  speedDemon,   // Races ahead of obstacles
+  mirror, // Mirrors player X
+  opposite, // Opposite X of player
+  orbit, // Orbits around the player
+  drunk, // Random wobble near player
+  speedDemon, // Races ahead of obstacles
   copycatDelay, // Copies player with 500ms delay
-  gravityFlip,  // Falls upward visually
-  strobe,       // Rapidly blinks in/out
-  sizeShift,    // Grows/shrinks continuously
-  shadowClone,  // 3 transparent copies
-  reverseMagnet,// Repels from player
-  zigzag,       // Zigzags across screen
-  bouncer,      // Bounces off walls
-  spinner,      // Spins in circles at center
-  stalker,      // Slowly approaches then runs
-  teleporter,   // Teleports every 2s
-  waveRider,    // Follows sine wave
-  phaseGhost,   // Phases through obstacles
-  shrinkingRing,// Traces shrinking spiral
-  fakeDeath,    // Brief death flash fake-out
+  gravityFlip, // Falls upward visually
+  strobe, // Rapidly blinks in/out
+  sizeShift, // Grows/shrinks continuously
+  shadowClone, // 3 transparent copies
+  reverseMagnet, // Repels from player
+  zigzag, // Zigzags across screen
+  bouncer, // Bounces off walls
+  spinner, // Spins in circles at center
+  stalker, // Slowly approaches then runs
+  teleporter, // Teleports every 2s
+  waveRider, // Follows sine wave
+  phaseGhost, // Phases through obstacles
+  shrinkingRing, // Traces shrinking spiral
+  fakeDeath, // Brief death flash fake-out
 }
 
 /// Runtime state for a single troll event.
@@ -99,7 +99,10 @@ class TrollSystem {
     final duration = 8.0 + _rng.nextDouble() * 4.0; // 8-12 seconds
 
     activeTroll = TrollEvent(behaviour: behaviour, duration: duration)
-      ..spawnTimer = 3.0 + _rng.nextDouble() * 2.0 // appear 3-5s in
+      ..spawnTimer =
+          3.0 +
+          _rng.nextDouble() *
+              2.0 // appear 3-5s in
       ..x = screenWidth / 2
       ..y = screenHeight * 0.3;
   }
@@ -127,8 +130,13 @@ class TrollSystem {
   }
 
   /// Update troll state each frame. Called from game engine's _updatePlaying.
-  void update(double dt, double playerX, double playerY,
-      double screenWidth, double screenHeight) {
+  void update(
+    double dt,
+    double playerX,
+    double playerY,
+    double screenWidth,
+    double screenHeight,
+  ) {
     final troll = activeTroll;
     if (troll == null || troll.finished) return;
 
@@ -153,8 +161,7 @@ class TrollSystem {
     // Fade out (last 0.5s)
     else if (troll.elapsed > troll.duration - 0.5) {
       troll.alpha = ((troll.duration - troll.elapsed) / 0.5) * 0.4;
-    }
-    else {
+    } else {
       troll.alpha = 0.4;
     }
 
@@ -170,8 +177,14 @@ class TrollSystem {
     _updateBehaviour(troll, dt, playerX, playerY, screenWidth, screenHeight);
   }
 
-  void _updateBehaviour(TrollEvent troll, double dt, double playerX,
-      double playerY, double screenWidth, double screenHeight) {
+  void _updateBehaviour(
+    TrollEvent troll,
+    double dt,
+    double playerX,
+    double playerY,
+    double screenWidth,
+    double screenHeight,
+  ) {
     final t = troll.elapsed;
     final pr = 10.0; // player radius
 
@@ -206,8 +219,14 @@ class TrollSystem {
         if (troll.delayBuffer.length > 120) {
           troll.delayBuffer.removeRange(0, troll.delayBuffer.length - 120);
         }
-        final delayFrames = (0.5 / dt).round().clamp(1, troll.delayBuffer.length);
-        final idx = (troll.delayBuffer.length - delayFrames).clamp(0, troll.delayBuffer.length - 1);
+        final delayFrames = (0.5 / dt).round().clamp(
+          1,
+          troll.delayBuffer.length,
+        );
+        final idx = (troll.delayBuffer.length - delayFrames).clamp(
+          0,
+          troll.delayBuffer.length - 1,
+        );
         troll.x = troll.delayBuffer[idx];
         troll.y = playerY + 60;
 
@@ -285,7 +304,8 @@ class TrollSystem {
         if (troll.teleportTimer >= 2.0) {
           troll.teleportTimer = 0;
           troll.x = pr + _rng.nextDouble() * (screenWidth - pr * 2);
-          troll.y = screenHeight * 0.15 + _rng.nextDouble() * (screenHeight * 0.35);
+          troll.y =
+              screenHeight * 0.15 + _rng.nextDouble() * (screenHeight * 0.35);
         }
 
       case TrollBehaviour.waveRider:
@@ -365,27 +385,37 @@ class TrollSystem {
     return false;
   }
 
-  // ── 20 Rage-bait death messages ──
+  // Store-friendly troll rage-bait death messages.
   static const List<String> trollRageBaitMessages = [
-    'hawww 😂😂😂😂',
-    'cry about it 😂😂😂😂',
-    'yess I did that lmaoooo 😂😂😂😂',
-    '✌️😂😂😂😂',
-    '😂😂😂😂😂',
-    'that was ME btw 😂😂😂😂',
-    'u fell for it LMAOOO 😂😂😂😂',
-    'get trolled bozo ✌️😂😂',
-    'skill issue fr fr 😂😂😂😂',
-    'imagine dying to a joke 😂😂✌️',
-    'I literally warned u lmao 😂😂😂😂',
-    'hehehehe 😂😂😂😂😂',
-    'too easy 😂😂✌️✌️',
-    'mission accomplished ✌️😂😂😂😂',
-    'not my fault u panicked 😂😂😂😂',
-    'lol lol lol lol lol 😂😂😂😂',
-    'gotcha ✌️✌️😂😂😂😂',
-    'u mad? 😂😂😂😂😂',
-    'stay mad bestie 😂✌️😂✌️',
-    'absolutely rekt 😂😂😂😂✌️',
+    "gotcha lmao",
+    "that was me btw",
+    "u trusted a suspicious circle, bold choice",
+    "the decoy sends its regards",
+    "pranked by geometry",
+    "i said nothing and u still believed me",
+    "the fake ball really sold the role",
+    "u followed the chaos tour perfectly",
+    "that troll ball has timing",
+    "best supporting actor: that distraction",
+    "u saw the bait and brought a plate",
+    "the clone did one lap and won",
+    "that was a premium distraction",
+    "the orbit was decorative, u made it personal",
+    "the wobble got u, respectfully",
+    "troll event complete, notes taken",
+    "u got juked by a circle",
+    "the fake-out department is thriving",
+    "that was a setup and u RSVP'd",
+    "the ghost ball had one job and nailed it",
+    "u chased the wrong problem beautifully",
+    "that blink was not your friend",
+    "the decoy is updating its resume",
+    "u trusted the side quest again",
+    "that was a tiny prank with big timing",
+    "the troll ball remains undefeated today",
+    "u got politely bamboozled",
+    "the distraction budget was well spent",
+    "that fake danger looked very convincing",
+    "mission: mildly annoying accomplished",
   ];
 }
