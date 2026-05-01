@@ -9,12 +9,12 @@ import 'package:polarity/providers/providers.dart';
 
 // Easter egg tap reaction pools (by tap number)
 const _easterEggReactions = <int, List<String>>{
-  1: ['hmm', 'wait', 'i see that', 'curious'],
-  2: ['ooh whats this', 'interesting', 'hold on', 'noted'],
-  3: ['ur onto something', 'keep tapping', 'u found a trail', 'getting warmer'],
-  4: ['not far now', 'few more', 'keep going', 'almost found it'],
-  5: ['just a lil more', 'patience', 'so persistent', 'dedicated'],
-  6: ['ONE MORE', 'this is it', 'final tap', 'LAST ONE'],
+  1: ['hmm 🤔', 'wait 👀', '👀', '🤔'],
+  2: ['ooh whats this 🤔', 'hmm interesting 👀', 'curious 🧐', 'wait wait 👀'],
+  3: ['ur onto something 🧐', 'keep tapping 👀', 'u found something 🤔', 'getting warmer 🧐'],
+  4: ['not far now 🤔', 'few more 👀', 'keep going 🧐', 'almost found it 👀'],
+  5: ['just a lil more 🤔', 'patience 🧐', 'so persistent 👀', 'dedicated 🤔'],
+  6: ['ONE MORE 👀', 'this is it 🤔', 'final tap 🧐', 'LAST ONE 👀'],
 };
 
 class MenuScreen extends ConsumerStatefulWidget {
@@ -268,14 +268,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                                         const SettingsScreen(),
                                     transitionsBuilder:
                                         (ctx, animation, a2, child) {
-                                          return FadeTransition(
-                                            opacity: animation,
-                                            child: child,
-                                          );
-                                        },
-                                    transitionDuration: const Duration(
-                                      milliseconds: 250,
-                                    ),
+                                      return FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      );
+                                    },
+                                    transitionDuration:
+                                        const Duration(milliseconds: 250),
                                   ),
                                 );
                                 if (mounted) {
@@ -307,12 +306,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
 
     String reaction;
     if (_easterEggTaps >= 7) {
-      reaction = 'soft mode unlocked';
+      reaction = 'ilysm';
       _easterEggDone = true;
       ref.read(easterEggActiveProvider.notifier).state = true;
     } else {
-      final pool =
-          _easterEggReactions[_easterEggTaps] ?? _easterEggReactions[6]!;
+      final pool = _easterEggReactions[_easterEggTaps] ?? _easterEggReactions[6]!;
       reaction = pool[_easterEggRng.nextInt(pool.length)];
     }
 
@@ -337,20 +335,20 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
     ref.read(hapticServiceProvider).mediumImpact();
     Navigator.of(context)
         .push(
-          PageRouteBuilder(
-            opaque: true,
-            pageBuilder: (ctx, a1, a2) => const GameScreen(),
-            transitionsBuilder: (ctx, animation, a2, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        )
+      PageRouteBuilder(
+        opaque: true,
+        pageBuilder: (ctx, a1, a2) => const GameScreen(),
+        transitionsBuilder: (ctx, animation, a2, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    )
         .then((_) {
-          if (mounted) {
-            _navActionInProgress = false;
-          }
-        });
+      if (mounted) {
+        _navActionInProgress = false;
+      }
+    });
   }
 }
 
@@ -398,7 +396,7 @@ class _MenuBackgroundPainter extends CustomPainter {
   final Paint _gridPaint = Paint();
 
   _MenuBackgroundPainter({required this.notifier, required this.color})
-    : super(repaint: notifier);
+      : super(repaint: notifier);
 
   @override
   void paint(Canvas canvas, Size size) {
