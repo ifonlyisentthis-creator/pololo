@@ -374,7 +374,7 @@ class TrollSystem {
     '😂😂😂😂😂',
     'that was ME btw 😂😂😂😂',
     'u fell for it LMAOOO 😂😂😂😂',
-    'get trolled bozo ✌️😂😂',
+    'get trolled buddy ✌️😂😂',
     'skill issue fr fr 😂😂😂😂',
     'imagine dying to a joke 😂😂✌️',
     'I literally warned u lmao 😂😂😂😂',

@@ -9,12 +9,12 @@ import 'package:polarity/providers/providers.dart';
 
 // Easter egg tap reaction pools (by tap number)
 const _easterEggReactions = <int, List<String>>{
-  1: ['hmm 🤔', 'wait 👀', '👀', '🤔'],
-  2: ['ooh whats this 🤔', 'hmm interesting 👀', 'curious 🧐', 'wait wait 👀'],
-  3: ['ur onto something 🧐', 'keep tapping 👀', 'u found something 🤔', 'getting warmer 🧐'],
-  4: ['not far now 🤔', 'few more 👀', 'keep going 🧐', 'almost found it 👀'],
-  5: ['just a lil more 🤔', 'patience 🧐', 'so persistent 👀', 'dedicated 🤔'],
-  6: ['ONE MORE 👀', 'this is it 🤔', 'final tap 🧐', 'LAST ONE 👀'],
+  1: ['bro?', 'why r u tapping?', 'hello?', 'u good?'],
+  2: ['stop that', 'actually chill', 'what r u doing', 'pls stop'],
+  3: ['ur gonna break my screen', 'im calling security', 'seriously?', 'bruh'],
+  4: ['ok ur actually annoying', 'stop it rn', 'im warning u', 'last chance'],
+  5: ['fine keep going', 'u really want this huh', 'almost there', '...'],
+  6: ['ONE MORE TAP', 'DO IT', 'I DARE U', 'LAST ONE'],
 };
 
 class MenuScreen extends ConsumerStatefulWidget {
@@ -306,7 +306,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
 
     String reaction;
     if (_easterEggTaps >= 7) {
-      reaction = 'ilysm';
+      reaction = 'easter egg unlocked 🔥';
       _easterEggDone = true;
       ref.read(easterEggActiveProvider.notifier).state = true;
     } else {
