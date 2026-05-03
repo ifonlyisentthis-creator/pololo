@@ -218,7 +218,7 @@ class GameConstants {
     "u should be legally required to apologize for that gameplay 😭😭😭😭😭😭",
     "im feeling second hand embarrassment through the screen 😂😂😂😂😂😂",
     "if i played like that i would simply never speak again 😭😭😭😭😭😭",
-    "u are bringing shame to ur entire family lineage with that run 😂😂😂😂😂😂",
+    "u are bringing shame to the entire leaderboard with that run 😂😂😂😂😂😂",
     "i have never felt so mortified on behalf of someone else 😭😭😭😭😭😭",
     "the sheer amount of cringe i just experienced is off the charts 😂😂😂😂😂😂",
     "u should honestly wear a paper bag over ur head after that 😭😭😭😭😭😭",
