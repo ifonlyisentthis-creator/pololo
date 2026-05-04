@@ -28,7 +28,7 @@ class ShareService {
 
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮',
+        text: 'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮\nhttps://play.google.com/store/apps/details?id=com.polarity.game',
       );
     } catch (_) {
       await _shareTextOnly(score: score, highScore: highScore, roast: roast);
@@ -43,7 +43,7 @@ class ShareService {
   }) async {
     try {
       await Share.share(
-        'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮',
+        'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮\nhttps://play.google.com/store/apps/details?id=com.polarity.game',
       );
     } catch (_) {}
   }
