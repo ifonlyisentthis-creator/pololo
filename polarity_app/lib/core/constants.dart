@@ -130,7 +130,7 @@ class GameConstants {
   // ── Privacy ──
   static const String privacyPolicyUrl = 'https://polarityprivacy.netlify.app/';
 
-  // ── death roasts (365) ──
+  // ── death roasts (385) ──
   static const List<String> deathRoasts = [
     // ── Pure laughing at you (~20) ──
     "LMAOOOOO no way u just did that 😂😂😂😂",
@@ -547,6 +547,30 @@ class GameConstants {
     "im writing that down as an intentional fail to protect u 😂😂😂😂",
     "u gave up on purpose i just know it 😂😂😂😂",
     "there is zero chance u actually tried and still did that 😂😂😂😂",
+
+    // ── Dont blame the game (~10) ──
+    "dont even dare to blame the game for that one 😂😂😂😂",
+    "the physics are fine u are the problem 😂😂😂😂",
+    "dont u dare say my controls are rigged 😂😂😂😂",
+    "im literally a flawless game u just have no skill 😂😂😂😂",
+    "do not try to act like that was a glitch 😂😂😂😂",
+    "my code is perfect ur thumbs are just broken 😂😂😂😂",
+    "if u blame the game for that u are lying to urself 😂😂😂😂",
+    "the game worked perfectly fine u just panicked 😂😂😂😂",
+    "my collision detection is 100% accurate unlike ur timing 😂😂😂😂",
+    "u cant blame lag when u literally stared at the wall 😂😂😂😂",
+
+    // ── Can u score past 10 (~10) ──
+    "can u genuinely score past 10 or is this ur peak 😂😂😂😂",
+    "let me know when u hit double digits i will wait 😂😂😂😂",
+    "i honestly dont think u can make it to 10 😂😂😂😂",
+    "if u score past 10 i will literally throw a party 😂😂😂😂",
+    "getting past 10 shouldnt be this hard for a normal person 😂😂😂😂",
+    "ur high score is looking a little single-digit rn 😂😂😂😂",
+    "do u even know what the number 10 looks like 😂😂😂😂",
+    "i bet u start sweating every time u get close to 10 😂😂😂😂",
+    "getting 10 points is free and u still cant do it 😂😂😂😂",
+    "i would be surprised if u ever see 10 points today 😂😂😂😂",
   ];
 
 
