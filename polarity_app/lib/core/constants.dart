@@ -130,7 +130,7 @@ class GameConstants {
   // ── Privacy ──
   static const String privacyPolicyUrl = 'https://polarityprivacy.netlify.app/';
 
-  // ── death roasts (325) ──
+  // ── death roasts (365) ──
   static const List<String> deathRoasts = [
     // ── Pure laughing at you (~20) ──
     "LMAOOOOO no way u just did that 😂😂😂😂",
@@ -500,6 +500,53 @@ class GameConstants {
     "i can always count on u to fail and thats something 😂😂😂😂",
     "ur loyalty to the fail screen is unmatched 😂😂😂😂",
     "at least ur committed to something even if its losing 😂😂😂😂",
+    // ── Keep it a secret (~10) ──
+    "please keep it a secret that u play this game 😂😂😂😂",
+    "i am formally asking u to never mention my name 😂😂😂😂",
+    "if someone asks what ur playing just lie pls 😂😂😂😂",
+    "i would appreciate it if u kept our association quiet 😂😂😂😂",
+    "do not post this anywhere im actually begging u 😂😂😂😂",
+    "im putting an nda on ur gameplay so nobody sees it 😂😂😂😂",
+    "u do not have my permission to tell people u play this 😂😂😂😂",
+    "hide my app icon so nobody knows u downloaded me 😂😂😂😂",
+    "im changing my name so u cant find me anymore 😂😂😂😂",
+    "i deny any knowledge of u ever playing this game 😂😂😂😂",
+
+    // ── What did I do to deserve this (~10) ──
+    "what did i do in my past life to deserve u as a player 😂😂😂😂",
+    "i must have terrible karma to get u as a downloader 😂😂😂😂",
+    "who did i make mad to deserve this kind of gameplay 😂😂😂😂",
+    "i thought i was a good game until u started playing 😂😂😂😂",
+    "im literally paying for my sins by having u as a player 😂😂😂😂",
+    "what did i do to deserve watching this tragedy unfold 😂😂😂😂",
+    "i apologize to whoever i hurt to deserve u playing me 😂😂😂😂",
+    "i didnt do anything wrong to deserve this level of bad 😂😂😂😂",
+    "my developer must hate me to let u play this 😂😂😂😂",
+    "im being punished and ur gameplay is the punishment 😂😂😂😂",
+
+    // ── No human plays this bad (~10) ──
+    "no human being actually plays this bad right 😂😂😂😂",
+    "the other apps on ur phone are asking if u do this on purpose 😂😂😂😂",
+    "ur calculator app called me to ask if u were okay 😂😂😂😂",
+    "there is no way a real person is tapping the screen rn 😂😂😂😂",
+    "i refuse to believe a human brain made that decision 😂😂😂😂",
+    "ur battery is draining itself just to escape u 😂😂😂😂",
+    "the wifi disconnected itself out of pure secondhand embarrassment 😂😂😂😂",
+    "even ur screen protector is trying to swipe away 😂😂😂😂",
+    "i have never seen a human fail with such precision 😂😂😂😂",
+    "u play like a literal algorithm designed to lose 😂😂😂😂",
+
+    // ── It was on purpose right (~10) ──
+    "u did that on purpose right... please tell me yes 😂😂😂😂",
+    "that was a joke right u didnt actually mean to do that 😂😂😂😂",
+    "im just gonna pretend u failed on purpose for my sanity 😂😂😂😂",
+    "u let go of the screen on purpose right 😂😂😂😂",
+    "that had to be intentional there is no other explanation 😂😂😂😂",
+    "tell me u were distracted so i can sleep at night 😂😂😂😂",
+    "u hit that wall as a joke right... right?? 😂😂😂😂",
+    "im writing that down as an intentional fail to protect u 😂😂😂😂",
+    "u gave up on purpose i just know it 😂😂😂😂",
+    "there is zero chance u actually tried and still did that 😂😂😂😂",
   ];
 
 
