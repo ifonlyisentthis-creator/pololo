@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 
 class GameConstants {
   GameConstants._();
@@ -132,7 +132,6 @@ class GameConstants {
 
   // ── death roasts (385) ──
   static const List<String> deathRoasts = [
-    // ── Pure laughing at you (~20) ──
     "LMAOOOOO no way u just did that 😂😂😂😂",
     "i actually screamed watching that 😂😂😂😂😂",
     "HAHAHAHA wait that was real?? 😂😂😂😂",
@@ -153,8 +152,6 @@ class GameConstants {
     "nah u r a comedian and u dont even know it 😂😂😂😂",
     "the way i just choked laughing at that 😂😂😂😂😂",
     "i need a minute hold on 😂😂😂😂😂😂",
-
-    // ── Skill roasts (~20) ──
     "u play like u have ur eyes closed 😂😂😂😂",
     "genuinely asking have u played a game before 😂😂😂😂",
     "u have the reaction time of a parked car 😂😂😂😂",
@@ -175,8 +172,6 @@ class GameConstants {
     "thats not even bad luck thats just bad playing 😂😂😂😂",
     "u had all that space and chose the wall instead 😂😂😂😂",
     "genuinely the worst player ive ever hosted 😂😂😂😂",
-
-    // ── Restart mockery (~20) ──
     "the confidence to hit restart after THAT 😂😂😂😂😂",
     "u pressing restart like the next one is gonna be any different 😂😂😂😂",
     "ah yes restart again that will definitely fix everything 😂😂😂😂",
@@ -197,8 +192,6 @@ class GameConstants {
     "ur restart speed is the only impressive thing about u 😂😂😂😂",
     "u really speedrunning the restart button rn 😂😂😂😂",
     "one more restart oughta do it right 😂😂😂😂😂",
-
-    // ── Uninstall / quit (~20) ──
     "just delete it save urself 😂😂😂😂",
     "the uninstall button is right there whenever ur ready 😂😂😂😂",
     "every second u keep this installed is a second wasted 😂😂😂😂",
@@ -219,8 +212,6 @@ class GameConstants {
     "genuinely why r u still here 😂😂😂😂",
     "u dont have to keep doing this to urself u know 😂😂😂😂",
     "just walk away no one is stopping u 😂😂😂😂",
-
-    // ── Time wasting (~15) ──
     "u just wasted 3 seconds of ur life for THAT 😂😂😂😂",
     "imagine using ur free time for this 😂😂😂😂😂",
     "u could have done literally anything else with ur time 😂😂😂😂",
@@ -236,8 +227,6 @@ class GameConstants {
     "u could be sleeping rn but instead ur doing this 😂😂😂😂",
     "time well spent right 😂😂😂😂😂",
     "all that effort for absolutely nothing 😂😂😂😂",
-
-    // ── Social shame / share dares (~15) ──
     "go ahead share that score i dare u 😂😂😂😂",
     "screenshot this and send it to ur friends i wanna see what they say 😂😂😂😂",
     "if someone asks u what u scored just lie 😂😂😂😂",
@@ -253,8 +242,6 @@ class GameConstants {
     "this score is a secret u should take to the grave 😂😂😂😂",
     "go tell someone what just happened and watch their face 😂😂😂😂",
     "imagine showing someone this and expecting respect 😂😂😂😂",
-
-    // ── Patronizing / fake sympathy (~15) ──
     "aww that was almost something 😂😂😂😂",
     "hey at least u pressed play thats something right 😂😂😂😂",
     "its okay not everyone is meant to be good at things 😂😂😂😂",
@@ -270,8 +257,6 @@ class GameConstants {
     "u survived longer than i expected so theres that 😂😂😂😂",
     "ur really good at pressing the start button tho 😂😂😂😂",
     "some people are just here to participate and thats fine 😂😂😂😂",
-
-    // ── Dismissive / you dont matter (~15) ──
     "oh u died? anyway 😂😂😂😂😂",
     "that was so forgettable i almost missed it 😂😂😂😂",
     "nobody is gonna remember that run including me 😂😂😂😂",
@@ -287,8 +272,6 @@ class GameConstants {
     "that run was so quick it didnt even count 😂😂😂😂",
     "oh wait thats it?? thats the whole run?? 😂😂😂😂",
     "literally nothing happened just now 😂😂😂😂",
-
-    // ── Disbelief (~15) ──
     "there is no way u just did that 😂😂😂😂😂",
     "i refuse to believe what i just witnessed 😂😂😂😂",
     "how is that even possible 😂😂😂😂😂",
@@ -304,8 +287,6 @@ class GameConstants {
     "that defied everything i know about this game 😂😂😂😂",
     "im still processing what just happened 😂😂😂😂",
     "that was genuinely the worst thing ive ever witnessed 😂😂😂😂",
-
-    // ── Ego deflation / "you thought" (~15) ──
     "u really thought u were about to go crazy huh 😂😂😂😂",
     "the confidence u had 2 seconds before failing is hilarious 😂😂😂😂",
     "u were feeling urself SO hard and then that happened 😂😂😂😂",
@@ -321,8 +302,6 @@ class GameConstants {
     "u were so sure of urself for no reason 😂😂😂😂",
     "all that energy and nothing to show for it 😂😂😂😂",
     "u really believed this was the one huh 😂😂😂😂",
-
-    // ── "Everyone else can do this" (~15) ──
     "literally everyone else gets past that part btw 😂😂😂😂",
     "u know most people dont fail there right 😂😂😂😂",
     "first time ive seen someone actually die at that spot 😂😂😂😂",
@@ -338,8 +317,6 @@ class GameConstants {
     "genuinely never seen someone struggle with that part before 😂😂😂😂",
     "casual players clear this without thinking btw 😂😂😂😂",
     "the tutorial is supposed to be free points but okay 😂😂😂😂",
-
-    // ── Rhetorical questions (~15) ──
     "r u okay like genuinely 😂😂😂😂",
     "what was the plan there exactly 😂😂😂😂",
     "what did u think was gonna happen 😂😂😂😂",
@@ -355,8 +332,6 @@ class GameConstants {
     "r u even trying or just tapping randomly 😂😂😂😂",
     "who gave u a phone 😂😂😂😂😂",
     "have u considered literally anything else as a hobby 😂😂😂😂",
-
-    // ── Predictable / boring (~15) ──
     "let me guess u died again 😂😂😂😂",
     "oh wow u failed what a surprise 😂😂😂😂",
     "i knew u were gonna fail before u even started 😂😂😂😂",
@@ -372,8 +347,6 @@ class GameConstants {
     "same thing different run 😂😂😂😂😂",
     "i literally wrote the fail screen before u even started 😂😂😂😂",
     "this feels like a rerun bc it is 😂😂😂😂",
-
-    // ── Embarrassment (~15) ──
     "im embarrassed FOR u rn 😂😂😂😂",
     "i hope nobody saw that 😂😂😂😂",
     "if i were u i would never speak of this again 😂😂😂😂",
@@ -389,8 +362,6 @@ class GameConstants {
     "if anyone asks u dont play this game okay 😂😂😂😂",
     "that was humiliating and we both know it 😂😂😂😂",
     "im looking away out of respect for ur dignity 😂😂😂😂",
-
-    // ── Giving up on you (~15) ──
     "i give up on u honestly 😂😂😂😂",
     "i have officially lost all faith in u 😂😂😂😂",
     "at what point do u just accept it 😂😂😂😂",
@@ -406,8 +377,6 @@ class GameConstants {
     "im done watching just tell me when u win oh wait 😂😂😂😂",
     "ur beyond help and im done pretending otherwise 😂😂😂😂",
     "i officially have zero expectations for u 😂😂😂😂",
-
-    // ── Pure reactions / short punchy (~20) ──
     "😂😂😂😂😂😂😂😂😂😂",
     "😭😭😭😭😭😭😭😭😭😭",
     "LMAOOOOOOOOOOO 😂😂😂😂😂",
@@ -428,8 +397,6 @@ class GameConstants {
     "that was TRAGIC 😂😂😂😂😂",
     "😂😂😂😂😭😭😭😭😂😂😂😂",
     "looooool 😂😂😂😂😂😂",
-
-    // ── The game is embarrassed of you (~10) ──
     "im genuinely ashamed to have u as a player rn 😂😂😂😂",
     "u r making me look bad and i dont appreciate it 😂😂😂😂",
     "pls dont tell anyone u play this game i have a reputation 😂😂😂😂",
@@ -440,8 +407,6 @@ class GameConstants {
     "im begging u to stop associating urself with me 😂😂😂😂",
     "i would refund u if i could just to get u to leave 😂😂😂😂",
     "ur bringing down property value just by being here 😂😂😂😂",
-
-    // ── Celebrating your failure (~10) ──
     "i genuinely enjoy watching u fail this much 😂😂😂😂",
     "this is peak entertainment for me btw 😂😂😂😂",
     "i could watch u lose all day honestly 😂😂😂😂",
@@ -452,8 +417,6 @@ class GameConstants {
     "i needed this laugh today thank u genuinely 😂😂😂😂",
     "u r the content i was missing in my life 😂😂😂😂",
     "i am having the time of my life watching this 😂😂😂😂",
-
-    // ── Random taps would do better (~10) ──
     "a random number generator would outplay u 😂😂😂😂",
     "i could shuffle the inputs randomly and get a better score 😂😂😂😂",
     "if i blindfolded someone and let them play they would beat u 😂😂😂😂",
@@ -464,8 +427,6 @@ class GameConstants {
     "u would genuinely score higher by not touching the screen 😂😂😂😂",
     "the screen protector has more game sense than u 😂😂😂😂",
     "accidental taps play better than ur intentional ones 😂😂😂😂",
-
-    // ── Scoreboard / leaderboard burns (~10) ──
     "the leaderboard doesnt even acknowledge scores that low 😂😂😂😂",
     "ur score just got laughed off the leaderboard 😂😂😂😂",
     "if the leaderboard could block people u would be first 😂😂😂😂",
@@ -476,8 +437,6 @@ class GameConstants {
     "ur score is an insult to the number system 😂😂😂😂",
     "ranking u would be disrespectful to the other players 😂😂😂😂",
     "the leaderboard sent u back to the menu personally 😂😂😂😂",
-
-    // ── Acting over it / bored of you (~10) ──
     "honestly im running out of ways to react to this 😂😂😂😂",
     "this stopped being funny and became sad like 3 runs ago 😂😂😂😂",
     "even making fun of u is getting boring now 😂😂😂😂",
@@ -488,8 +447,6 @@ class GameConstants {
     "u failing doesnt even register with me anymore 😂😂😂😂",
     "i used to find this funny now its just background noise 😂😂😂😂",
     "wake me up when u do something worth reacting to 😂😂😂😂",
-
-    // ── Your commitment to losing (~10) ──
     "the dedication u have to being terrible is actually unmatched 😂😂😂😂",
     "nobody tries this hard to be this bad 😂😂😂😂",
     "u r putting in overtime just to stay terrible 😂😂😂😂",
@@ -500,7 +457,6 @@ class GameConstants {
     "i can always count on u to fail and thats something 😂😂😂😂",
     "ur loyalty to the fail screen is unmatched 😂😂😂😂",
     "at least ur committed to something even if its losing 😂😂😂😂",
-    // ── Keep it a secret (~10) ──
     "please keep it a secret that u play this game 😂😂😂😂",
     "i am formally asking u to never mention my name 😂😂😂😂",
     "if someone asks what ur playing just lie pls 😂😂😂😂",
@@ -511,8 +467,6 @@ class GameConstants {
     "hide my app icon so nobody knows u downloaded me 😂😂😂😂",
     "im changing my name so u cant find me anymore 😂😂😂😂",
     "i deny any knowledge of u ever playing this game 😂😂😂😂",
-
-    // ── What did I do to deserve this (~10) ──
     "what did i do in my past life to deserve u as a player 😂😂😂😂",
     "i must have terrible karma to get u as a downloader 😂😂😂😂",
     "who did i make mad to deserve this kind of gameplay 😂😂😂😂",
@@ -523,8 +477,6 @@ class GameConstants {
     "i didnt do anything wrong to deserve this level of bad 😂😂😂😂",
     "my developer must hate me to let u play this 😂😂😂😂",
     "im being punished and ur gameplay is the punishment 😂😂😂😂",
-
-    // ── No human plays this bad (~10) ──
     "no human being actually plays this bad right 😂😂😂😂",
     "the other apps on ur phone are asking if u do this on purpose 😂😂😂😂",
     "ur calculator app called me to ask if u were okay 😂😂😂😂",
@@ -535,8 +487,6 @@ class GameConstants {
     "even ur screen protector is trying to swipe away 😂😂😂😂",
     "i have never seen a human fail with such precision 😂😂😂😂",
     "u play like a literal algorithm designed to lose 😂😂😂😂",
-
-    // ── It was on purpose right (~10) ──
     "u did that on purpose right... please tell me yes 😂😂😂😂",
     "that was a joke right u didnt actually mean to do that 😂😂😂😂",
     "im just gonna pretend u failed on purpose for my sanity 😂😂😂😂",
@@ -547,8 +497,6 @@ class GameConstants {
     "im writing that down as an intentional fail to protect u 😂😂😂😂",
     "u gave up on purpose i just know it 😂😂😂😂",
     "there is zero chance u actually tried and still did that 😂😂😂😂",
-
-    // ── Dont blame the game (~10) ──
     "dont even dare to blame the game for that one 😂😂😂😂",
     "the physics are fine u are the problem 😂😂😂😂",
     "dont u dare say my controls are rigged 😂😂😂😂",
@@ -559,8 +507,6 @@ class GameConstants {
     "the game worked perfectly fine u just panicked 😂😂😂😂",
     "my collision detection is 100% accurate unlike ur timing 😂😂😂😂",
     "u cant blame lag when u literally stared at the wall 😂😂😂😂",
-
-    // ── Can u score past 10 (~10) ──
     "can u genuinely score past 10 or is this ur peak 😂😂😂😂",
     "let me know when u hit double digits i will wait 😂😂😂😂",
     "i honestly dont think u can make it to 10 😂😂😂😂",
