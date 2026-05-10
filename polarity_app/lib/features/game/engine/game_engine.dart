@@ -1223,27 +1223,6 @@ class GameEngine {
     return deck;
   }
 
-  // Emoji pools for randomization
-  static const _roastEmojis = ['😂', '🤣'];
-  static const _praiseEmojis = ['😭'];
-
-  /// Strips trailing emoji characters from a message and appends 2-8 random
-  /// emojis from the given pool so every death message feels organic.
-  String _randomizeEmojis(String message, List<String> emojiPool) {
-    // Strip all trailing emoji (any character outside BMP or known emoji codepoints)
-    // We match common emoji patterns: surrogate pairs, ZWJ sequences, and single emoji
-    final stripped = message.replaceAll(
-      RegExp(r'[\s]*(?:[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}][\u{FE0F}\u{200D}]*)+\s*$', unicode: true),
-      '',
-    ).trimRight();
-
-    final count = 2 + _rng.nextInt(7); // 2 to 8 inclusive
-    final buf = StringBuffer(stripped)..write(' ');
-    for (int i = 0; i < count; i++) {
-      buf.write(emojiPool[_rng.nextInt(emojiPool.length)]);
-    }
-    return buf.toString();
-  }
 
   String getRandomRoast() {
     if (_roastCursor >= _roastDeck.length) {
@@ -1256,8 +1235,7 @@ class GameEngine {
       }
       _roastCursor = 0;
     }
-    final raw = GameConstants.deathRoasts[_roastDeck[_roastCursor++]];
-    return _randomizeEmojis(raw, _roastEmojis);
+    return GameConstants.deathRoasts[_roastDeck[_roastCursor++]];
   }
 
   String _getRandomPraise() {
@@ -1271,8 +1249,7 @@ class GameEngine {
       }
       _praiseCursor = 0;
     }
-    final raw = GameConstants.deathPraises[_praiseDeck[_praiseCursor++]];
-    return _randomizeEmojis(raw, _praiseEmojis);
+    return GameConstants.deathPraises[_praiseDeck[_praiseCursor++]];
   }
 
   /// Returns either a roast or praise based on score and mode.
