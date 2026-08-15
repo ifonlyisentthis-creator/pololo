@@ -70,10 +70,8 @@ class _FakeStorageService extends StorageService {
     _firstLaunch = false;
   }
 
-  @override
   bool get easyMode => _easyMode;
 
-  @override
   Future<void> setEasyMode(bool value) async {
     _easyMode = value;
   }
@@ -102,21 +100,16 @@ class _FakeStorageService extends StorageService {
     _rememberThemeAcrossLaunches = value;
   }
 
-  @override
   Future<void> setHighScoreMode(bool easyMode) async {}
 
-  @override
   int get leaderboardBestEasyScore => _leaderboardBestEasyScore;
 
-  @override
   Future<void> setLeaderboardBestEasyScore(int score) async {
     _leaderboardBestEasyScore = score;
   }
 
-  @override
   int get leaderboardBestHardScore => _leaderboardBestHardScore;
 
-  @override
   Future<void> setLeaderboardBestHardScore(int score) async {
     _leaderboardBestHardScore = score;
   }

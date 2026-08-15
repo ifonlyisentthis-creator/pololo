@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:polarity/features/game/engine/game_engine.dart';
 import 'package:polarity/services/audio_service.dart';
 import 'package:polarity/services/haptic_service.dart';

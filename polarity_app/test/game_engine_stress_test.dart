@@ -67,7 +67,7 @@ void main() {
       for (int cycle = 0; cycle < 80; cycle++) {
         engine.startGame();
         engine.debugInvincible = false;
-        engine.easyMode = false;
+
 
         // Force immediate wall death.
         engine.player.x = 0;

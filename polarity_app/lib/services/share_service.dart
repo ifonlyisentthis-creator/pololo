@@ -26,9 +26,11 @@ class ShareService {
       final file = File('${dir.path}/polarity_score.png');
       await file.writeAsBytes(imageBytes);
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮\nhttps://play.google.com/store/apps/details?id=com.polarity.game',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮\nhttps://play.google.com/store/apps/details?id=com.polarity.game',
+        ),
       );
     } catch (_) {
       await _shareTextOnly(score: score, highScore: highScore, roast: roast);
@@ -42,8 +44,10 @@ class ShareService {
     required String roast,
   }) async {
     try {
-      await Share.share(
-        'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮\nhttps://play.google.com/store/apps/details?id=com.polarity.game',
+      await SharePlus.instance.share(
+        ShareParams(
+          text: 'POLARITY | Score: $score | Best: $highScore\n$roast\nCan you beat me? 🎮\nhttps://play.google.com/store/apps/details?id=com.polarity.game',
+        ),
       );
     } catch (_) {}
   }
